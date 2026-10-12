@@ -13,7 +13,7 @@ food, reproduce, inherit traits, mutate, and evolve through natural selection.
 
 - C# / .NET 10 (SDK 10.0.401; `latestFeature` roll-forward, no prerelease SDKs)
 - WPF (Windows desktop application)
-- SkiaSharp.Views.WPF 4.152.2 (dependency only; rendering is not implemented)
+- SkiaSharp.Views.WPF 4.152.2 (CPU canvas rendering)
 - xUnit v3 4.0.2, xunit.runner.visualstudio 4.0.1, Microsoft.NET.Test.Sdk 18.10.1
 - NuGet lock files for reproducible dependency resolution
 
@@ -73,12 +73,37 @@ group brings OpenTK 4.3.0 and OpenTK.GLWpfControl 4.2.3 transitively.
 dotnet run --project src/EvoWorld.Desktop/EvoWorld.Desktop.csproj --no-build
 ```
 
-The shell displays **EvoWorld — Simulation Not Started**.
+The window initially displays the seed-42 world at tick zero: 20 cyan organisms
+with heading indicators and 100 stationary green food items inside a dark world
+rectangle. Organism radius is 5 world units, food radius is 3, and heading length
+is 10. Draw order is background, boundary, food, organisms, then headings.
+
+Start enables one UI-thread dispatcher timer; its first callback advances one
+fixed simulation step. Pause preserves the current world. Start resumes it.
+Reset stops playback and recreates the original world with the same settings and
+seed, at tick zero, ready to start. Closing stops and detaches the timer.
+
+The nominal interval is 1/30 real second. Delayed callbacks skip missed intervals;
+there is intentionally no catch-up or elapsed-time accumulation. Each callback
+advances exactly one configured simulated timestep. Painting only reads a single
+immutable snapshot and never advances the engine or consumes random values.
+
+The canvas uses top-left coordinates with positive Y downward, matching movement.
+It scales the full world uniformly and centers it with margins when needed.
+Radii, strokes, and headings scale with world units. Resize repaints without
+advancing or resetting. Dimensions that cannot safely fit Skia float arithmetic,
+or whose short axis would occupy less than one canvas pixel, display an empty
+background and a status message instead of an invalid transformation.
+
+Simulation or drawing errors stop playback and show a single inline error state.
+Reset permits recovery; deterministic failures are not automatically retried.
+Task 4.5 adds visualization and playback, without changing simulation behavior.
 
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, and fixed-step movement are
-implemented. Further ecosystem behavior and playback remain planned.
+implemented. Further ecosystem behavior remains planned. Basic dispatcher
+playback is implemented.
 
 - Core will own world state, entities, rules, simulation time, RNG, energy, and
   collision calculations. Desktop will own controls, rendering, viewport
@@ -187,10 +212,16 @@ with golden-sequence and configuration tests. Task 3 adds immutable organisms,
 food, world snapshots, population configuration, and deterministic initialization.
 Task 4 adds constant-speed fixed-step movement, reflection, and immutable
 simulation snapshots. Energy expenditure, food consumption, death, reproduction,
-evolution, world rendering, and playback controls remain unimplemented.
+and evolution remain unimplemented. Task 4.5 adds world rendering and basic
+playback controls.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.
 The shell started with the correct window title and closed normally. Temporary
 probes were removed. Visual appearance, placeholder visibility, and visual
 resize behavior still require manual verification; GPU rendering was not tested.
+
+Task 4.5 programmatic checks verified paint callbacks, organism/food/heading
+pixels, timer controls, deterministic reset, resize repaint, error recovery, and
+shutdown. Manual visual inspection of appearance and reflections remains pending.
+Pure viewport math is source-linked into Tests without referencing WPF or Desktop.

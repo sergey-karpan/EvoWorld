@@ -77,7 +77,7 @@ The shell displays **EvoWorld — Simulation Not Started**.
 
 ## Architecture Decisions
 
-PCG32 and immutable simulation configuration are implemented. World simulation
+PCG32, immutable simulation configuration, and initial world creation are implemented. World simulation
 and playback decisions below remain planned.
 
 - Core will own world state, entities, rules, simulation time, RNG, energy, and
@@ -113,6 +113,9 @@ and playback decisions below remain planned.
   tick duration in seconds, and world width/height as doubles. Continuous values
   must be finite and positive; zero is a valid seed. `CreateDefault()` uses seed
   42, timestep `1.0 / 30.0`, and world dimensions 1000 by 700.
+  Initial counts default to 20 organisms and 100 food items; zero is supported
+  and negative counts are rejected. The four-argument constructor retains its
+  existing values and delegates using these same default counts.
   Future simulation time will derive from a `long TickCount` multiplied by the
   configured timestep; tick counting and stepping are not implemented yet.
 - Playback speed will control steps per real second, never the physical timestep.
@@ -120,13 +123,35 @@ and playback decisions below remain planned.
   identical settings and seed will reproduce the initial state and subsequent
   sequence. A future `SimulationRunner` will manage accumulation and catch-up limits.
 
+## Initial World Creation
+
+`WorldInitializer.Create(settings)` produces an immutable `WorldState` with
+organisms and food. Entities are immutable sealed classes with reference equality
+and stable IDs starting at zero separately in each category. World collections
+own defensive copies behind read-only views; ordinary reads do not copy.
+
+A fresh PCG32 consumes X, Y, heading for each organism in ascending ID order,
+then X, Y for each food item in ascending ID order. The total is exactly
+`3 * InitialOrganismCount + 2 * InitialFoodCount` outputs, with no placement retries.
+IDs and initial energies (organisms: 100; food: 20) consume no random outputs.
+Overlaps are allowed. Coordinates use `output / 4294967296.0 * dimension`;
+headings use the same conversion scaled by `2 * Math.PI`.
+If rounding reaches an exclusive upper bound, `Math.BitDecrement` corrects it
+without another RNG call, including for subnormal dimensions.
+
+Equivalent settings reproduce the same initial values in the supported execution
+environment. A seed-42, 100-by-80, two-organism/two-food fixture verifies exact
+double bits calculated independently in Python from Task 2 golden outputs.
+
 ## Development Status
 
 Task 1 established the solution structure, WPF application shell, dependency
 configuration, and testing infrastructure. Task 2 implements PCG32, immutable
 state snapshots, capture/restore, and validated immutable `SimulationSettings`,
-with golden-sequence and configuration tests. World initialization, organisms,
-food, simulation behavior, and rendering remain future milestones.
+with golden-sequence and configuration tests. Task 3 adds immutable organisms,
+food, world snapshots, population configuration, and deterministic initialization.
+Movement, energy consumption, food consumption, reproduction, evolution,
+simulation stepping, and world rendering are not implemented.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

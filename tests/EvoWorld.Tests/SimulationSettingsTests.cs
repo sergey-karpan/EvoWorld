@@ -71,6 +71,8 @@ public class SimulationSettingsTests
         Assert.Equal(1.0 / 30.0, settings.TickDurationSeconds);
         Assert.Equal(1000.0, settings.WorldWidth);
         Assert.Equal(700.0, settings.WorldHeight);
+        Assert.Equal(20, settings.InitialOrganismCount);
+        Assert.Equal(100, settings.InitialFoodCount);
     }
 
     [Fact]
@@ -94,5 +96,59 @@ public class SimulationSettingsTests
         Assert.Equal(double.Epsilon, settings.TickDurationSeconds);
         Assert.Equal(double.MaxValue, settings.WorldWidth);
         Assert.Equal(double.Epsilon, settings.WorldHeight);
+    }
+
+    [Fact]
+    public void FourArgumentConstructorRetainsValuesAndUsesDefaultCounts()
+    {
+        var settings = new SimulationSettings(0UL, 0.25, 123, 456);
+        Assert.Equal(0UL, settings.Seed);
+        Assert.Equal(0.25, settings.TickDurationSeconds);
+        Assert.Equal(123.0, settings.WorldWidth);
+        Assert.Equal(456.0, settings.WorldHeight);
+        Assert.Equal(20, settings.InitialOrganismCount);
+        Assert.Equal(100, settings.InitialFoodCount);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0, 7)]
+    [InlineData(4, 0)]
+    [InlineData(4, 7)]
+    [InlineData(int.MaxValue, int.MaxValue)]
+    public void ExplicitNonnegativeCountsArePreserved(int organisms, int food)
+    {
+        var settings = new SimulationSettings(42UL, 0.125, 100, 80, organisms, food);
+        Assert.Equal(organisms, settings.InitialOrganismCount);
+        Assert.Equal(food, settings.InitialFoodCount);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void NegativeOrganismCountsIdentifyParameter(int count)
+    {
+        Assert.Equal("initialOrganismCount", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42UL, 0.125, 100, 80, count, 0)).ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void NegativeFoodCountsIdentifyParameter(int count)
+    {
+        Assert.Equal("initialFoodCount", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42UL, 0.125, 100, 80, 0, count)).ParamName);
+    }
+
+    [Fact]
+    public void ExtendedConstructorRetainsExistingNumericValidation()
+    {
+        Assert.Equal("tickDurationSeconds", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(0UL, double.NaN, 100, 80, 0, 0)).ParamName);
+        Assert.Equal("worldWidth", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(0UL, 0.125, double.PositiveInfinity, 80, 0, 0)).ParamName);
+        Assert.Equal("worldHeight", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(0UL, 0.125, 100, 0, 0, 0)).ParamName);
     }
 }

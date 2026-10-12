@@ -1,0 +1,25 @@
+# .NET build output
+**/bin/
+**/obj/
+artifacts/
+
+# Visual Studio and user-specific IDE files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+
+# Test and coverage output
+TestResults/
+**/TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+
+# Generated packages and logs
+*.nupkg
+*.snupkg
+*.log

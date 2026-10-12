@@ -77,8 +77,8 @@ The shell displays **EvoWorld — Simulation Not Started**.
 
 ## Architecture Decisions
 
-PCG32, immutable simulation configuration, and initial world creation are implemented. World simulation
-and playback decisions below remain planned.
+PCG32, immutable configuration, world creation, and fixed-step movement are
+implemented. Further ecosystem behavior and playback remain planned.
 
 - Core will own world state, entities, rules, simulation time, RNG, energy, and
   collision calculations. Desktop will own controls, rendering, viewport
@@ -105,7 +105,7 @@ and playback decisions below remain planned.
   the official [PCG C basic reference](https://github.com/imneme/pcg-c-basic/tree/bc39cd76ac3d541e618606bcc6e1e5ba5e5e6aa3),
   independently of the production C# implementation. Organisms and rendering will not own RNGs, and
   seeds will not be derived from wall-clock time.
-- Simulation will use a configurable fixed timestep, initially `1/30` simulated
+- Simulation uses a configurable fixed timestep, initially `1/30` simulated
   second, independent of rendering. Stable entity and event ordering, explicit
   resource tie-breaking, and no outcome-affecting unordered or parallel processing
   will support reproducibility. Core will not depend on wall-clock time.
@@ -116,8 +116,10 @@ and playback decisions below remain planned.
   Initial counts default to 20 organisms and 100 food items; zero is supported
   and negative counts are rejected. The four-argument constructor retains its
   existing values and delegates using these same default counts.
-  Future simulation time will derive from a `long TickCount` multiplied by the
-  configured timestep; tick counting and stepping are not implemented yet.
+  Constant `OrganismSpeed` defaults to 50 world units per simulated second.
+  Four- and six-argument constructors retain this default; a seven-argument
+  constructor accepts explicit finite, nonnegative speed, including zero.
+  Simulation time is represented by a `long TickCount` and the configured timestep.
 - Playback speed will control steps per real second, never the physical timestep.
   Pause will stop advancement; resume will discard paused elapsed time. Reset with
   identical settings and seed will reproduce the initial state and subsequent
@@ -143,6 +145,39 @@ Equivalent settings reproduce the same initial values in the supported execution
 environment. A seed-42, 100-by-80, two-organism/two-food fixture verifies exact
 double bits calculated independently in Python from Task 2 golden outputs.
 
+## Fixed-Step Movement
+
+`new Simulation(settings)` owns one persistent PCG32, passes it through world
+initialization, and retains its post-initialization state. `AdvanceTick()` advances
+exactly one configured timestep and consumes zero random outputs. The engine is
+single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
+with `World` and `TickCount`; previous world and simulation snapshots remain valid.
+
+Movement uses `distance = speed * timestep`, then cosine/sine of the heading
+for X/Y displacement. Exact cardinal headings use exact axis components to avoid
+spurious perpendicular motion along walls. Reflection reverses the perpendicular
+direction component; headings without a net reversal are preserved exactly.
+Exact endpoint hits point inward. Upper-wall positions use `Math.BitDecrement`
+to preserve the half-open world bounds. Food and all energy values stay unchanged.
+
+Reflection has bounded work independent of bounce count. Interior candidates use
+ordinary floating-point addition. Boundary calculations align the original
+coordinate, signed displacement magnitude, and dimension as exact dyadic integers,
+then use a `UInt128` remainder with the conceptual period `2L`. Each aligned input
+must occupy at most 126 bits; this leaves room for addition and the doubled period.
+Parity therefore does not depend on a rounded candidate or floating-point quotient.
+Subnormal and maximum dimensions work when the calculation fits this domain.
+Excessive exponent separation (for example, unit movement in an epsilon-sized
+world) is rejected rather than approximating reflection direction. No arbitrary-
+precision arithmetic or per-bounce loops are used.
+
+Non-finite distance, displacement, candidate, unsafe exact alignment, or tick-count
+overflow throws `OverflowException`. Valid settings remain constructible even if
+a particular tick cannot be represented. All next-state construction happens
+before replacing one state reference, so failed ticks preserve world, count, and
+RNG. Floating-point/trigonometric behavior outside the supported execution
+environment is not claimed to be universally bitwise identical.
+
 ## Development Status
 
 Task 1 established the solution structure, WPF application shell, dependency
@@ -150,8 +185,9 @@ configuration, and testing infrastructure. Task 2 implements PCG32, immutable
 state snapshots, capture/restore, and validated immutable `SimulationSettings`,
 with golden-sequence and configuration tests. Task 3 adds immutable organisms,
 food, world snapshots, population configuration, and deterministic initialization.
-Movement, energy consumption, food consumption, reproduction, evolution,
-simulation stepping, and world rendering are not implemented.
+Task 4 adds constant-speed fixed-step movement, reflection, and immutable
+simulation snapshots. Energy expenditure, food consumption, death, reproduction,
+evolution, world rendering, and playback controls remain unimplemented.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

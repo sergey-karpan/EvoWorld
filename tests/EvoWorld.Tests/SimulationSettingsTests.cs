@@ -151,4 +151,42 @@ public class SimulationSettingsTests
         Assert.Equal("worldHeight", Assert.Throws<ArgumentOutOfRangeException>(
             () => new SimulationSettings(0UL, 0.125, 100, 0, 0, 0)).ParamName);
     }
+
+    [Fact]
+    public void ExistingConstructorsAndDefaultSettingsUseSharedSpeed()
+    {
+        var four = new SimulationSettings(42UL, 1.0 / 30.0, 1000, 700);
+        var six = new SimulationSettings(42UL, 1.0 / 30.0, 1000, 700, 3, 4);
+        var defaults = SimulationSettings.CreateDefault();
+        Assert.Equal(50.0, four.OrganismSpeed);
+        Assert.Equal(20, four.InitialOrganismCount);
+        Assert.Equal(100, four.InitialFoodCount);
+        Assert.Equal(50.0, six.OrganismSpeed);
+        Assert.Equal(3, six.InitialOrganismCount);
+        Assert.Equal(4, six.InitialFoodCount);
+        Assert.Equal(50.0, defaults.OrganismSpeed);
+        Assert.Equal(four.InitialOrganismCount, defaults.InitialOrganismCount);
+        Assert.Equal(four.InitialFoodCount, defaults.InitialFoodCount);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(12.5)]
+    [InlineData(double.MaxValue)]
+    public void ExplicitFiniteNonnegativeSpeedIsPreserved(double speed)
+    {
+        var settings = new SimulationSettings(0UL, 1, 10, 10, 0, 0, speed);
+        Assert.Equal(speed, settings.OrganismSpeed);
+    }
+
+    [Theory]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void InvalidSpeedIdentifiesParameter(double speed)
+    {
+        Assert.Equal("organismSpeed", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(0UL, 1, 10, 10, 0, 0, speed)).ParamName);
+    }
 }

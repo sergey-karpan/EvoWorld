@@ -14,7 +14,13 @@ public static class WorldInitializer
     public static WorldState Create(SimulationSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var random = new Pcg32(settings.Seed);
+        return Create(settings, new Pcg32(settings.Seed));
+    }
+
+    internal static WorldState Create(SimulationSettings settings, Pcg32 random)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(random);
         var organisms = new Organism[settings.InitialOrganismCount];
         var foodItems = new Food[settings.InitialFoodCount];
 

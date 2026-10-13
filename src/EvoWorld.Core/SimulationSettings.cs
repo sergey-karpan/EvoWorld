@@ -44,6 +44,7 @@ public sealed class SimulationSettings
     public double NeuralWeightMax { get; }
     public double InitialNeuralWeightVariationAmplitude { get; }
     public double SpeedModulationAmplitude { get; }
+    public double NeuralWeightMutationAmplitude { get; }
 
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight)
         : this(seed, tickDurationSeconds, worldWidth, worldHeight, DefaultOrganismCount, DefaultFoodCount)
@@ -153,6 +154,34 @@ public sealed class SimulationSettings
         double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
         bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
         double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight, initialOrganismCount, initialFoodCount,
+            organismSpeed, organismEnergyDrainPerSecond, foodPickupRadius, foodRegenerationIntervalSeconds,
+            maxFoodCount, reproductionEnergyThreshold, reproductionEnergyCost, offspringInitialEnergy,
+            maxOrganismCount, initialSpeedVariationAmplitude, initialMetabolismVariationAmplitude,
+            minSpeed, maxSpeed, minMetabolism, maxMetabolism, speedMutationAmplitude, metabolismMutationAmplitude,
+            organismSensingRadius, organismSteeringRate, initialSensingRadiusVariationAmplitude,
+            initialSteeringRateVariationAmplitude, minSensingRadius, maxSensingRadius, minSteeringRate,
+            maxSteeringRate, sensingRadiusMutationAmplitude, steeringRateMutationAmplitude, enableNeuralControl,
+            neuralWeightMin, neuralWeightMax, initialNeuralWeightVariationAmplitude, speedModulationAmplitude, 0)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
+        bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
+        double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
+        double neuralWeightMutationAmplitude)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
@@ -210,6 +239,7 @@ public sealed class SimulationSettings
         ValidateNonnegativeFinite(initialNeuralWeightVariationAmplitude, nameof(initialNeuralWeightVariationAmplitude));
         ValidateNonnegativeFinite(speedModulationAmplitude, nameof(speedModulationAmplitude));
         if (speedModulationAmplitude >= 1) throw new ArgumentOutOfRangeException(nameof(speedModulationAmplitude));
+        ValidateNonnegativeFinite(neuralWeightMutationAmplitude, nameof(neuralWeightMutationAmplitude));
 
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
@@ -242,6 +272,7 @@ public sealed class SimulationSettings
         NeuralWeightMin = neuralWeightMin; NeuralWeightMax = neuralWeightMax;
         InitialNeuralWeightVariationAmplitude = initialNeuralWeightVariationAmplitude;
         SpeedModulationAmplitude = speedModulationAmplitude;
+        NeuralWeightMutationAmplitude = neuralWeightMutationAmplitude;
     }
 
     public static SimulationSettings CreateDefault() => new(42UL, 1.0 / 30.0, 1000.0, 700.0);

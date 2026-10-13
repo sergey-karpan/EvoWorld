@@ -138,7 +138,7 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, neural weight mutation, predators and
+correlations, lineage and generational statistics, neural weight statistics, predators and
 visualization beyond simple coloring remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
@@ -155,10 +155,12 @@ behavior and historical RNG contracts. Every organism has a non-null `Brain`;
 legacy constructors share an immutable zero brain. When enabled, neural control
 replaces Task 9 steering completely, including when the brain is zero or no food
 is sensed. Zero brains preserve heading before reflection and inherited movement
-speed. Replacements and newborns retain the exact parent brain reference in both
-modes. No neural weights mutate, and newborns first act on the following tick.
+speed. Adult replacements retain the exact brain reference. Newborns inherit
+that reference when neural mutation is inactive; otherwise they receive a new
+immutable genome derived from their own parent. Newborns first act next tick.
 
-The 38-argument settings constructor appends five immutable settings:
+The 38-argument settings constructor appends the first five settings below;
+Task 11c adds a 39-argument constructor appending the mutation amplitude:
 
 | Setting | Default | Validation |
 |---|---:|---|
@@ -167,6 +169,7 @@ The 38-argument settings constructor appends five immutable settings:
 | NeuralWeightMax | 1 | Finite, within [-8,8], at or above zero, greater than minimum |
 | InitialNeuralWeightVariationAmplitude | 0.5 | Finite, nonnegative |
 | SpeedModulationAmplitude | 0.5 | Finite, nonnegative, strictly less than 1 |
+| NeuralWeightMutationAmplitude | 0 | Finite, nonnegative; no finite upper limit |
 
 All older signatures retain these defaults. Neural settings are validated even
 when disabled; custom brains need only satisfy `NeuralGenome`'s [-8,8] bounds.
@@ -224,11 +227,49 @@ is active, requiring both enable=true and amplitude>0:
 
 Each Task 8/9 group is inactive when both amplitudes are zero; otherwise it draws
 both channels per organism. Encoding and forward evaluation consume zero RNG.
-Food regeneration still draws two per spawn, then reproduction draws six per birth;
-one spawn and two births consume fourteen outputs. Brain inheritance adds none.
+Food regeneration still draws two per spawn before reproduction. Each birth
+first draws position, heading, Speed, Metabolism, SensingRadius and SteeringRate.
+Inactive neural mutation adds no draws; active mutation adds 74 in ascending
+parameter order, even if every result clamps or rounds to the parent value.
+
+Task 11c activates mutation only when neural control is enabled and
+`NeuralWeightMutationAmplitude > 0`. Each parameter uses
+`delta = (2 * (output / 2^32) - 1) * amplitude`, followed by bounded addition
+to the raw parent weight and clamping to `NeuralWeightMin..NeuralWeightMax`.
+Amplitude is uniform variation, not a standard deviation. The parent genome
+is unchanged, including custom parents outside the narrower production bounds.
+Every active birth constructs a fresh genome; identical child values are allowed.
+
+Addition compares delta against `upper - parent` and `lower - parent` before
+forming a candidate. The positive comparison saturates at upper, the negative
+comparison at lower; otherwise ordinary addition and clamping apply. Endpoint
+differences are bounded by 16, so amplitudes up to `double.MaxValue` safely
+saturate without non-finite candidates. This uses ordinary binary64 arithmetic,
+without FMA or epsilon comparisons. Actual failures still roll back the complete
+transaction, including tentative genomes, RNG and both ID counters.
+
+Initialization remains governed solely by the initial amplitude; the eight-mode
+matrix above is unchanged. The combined neural initialization/birth contract is:
+
+| Neural control | Initial amplitude | Mutation amplitude | Neural init draws per organism | Draws per successful birth |
+|---|---|---|---:|---:|
+| Disabled | Any valid | Any valid | 0 | 6 |
+| Enabled | 0 | 0 | 0 | 6 |
+| Enabled | Positive | 0 | 74 | 6 |
+| Enabled | 0 | Positive | 0 | 80 |
+| Enabled | Positive | Positive | 74 | 80 |
+
+Skipped births consume zero draws. One food spawn and two births consume
+fourteen outputs when mutation is inactive, or 162 when active. The default
+mutation amplitude zero preserves Task 11b's exact reference inheritance and
+RNG contract. Equivalent settings, seed and runtime reproduce complete genomes
+and subsequent behavior; adaptive improvement is not guaranteed. Independent
+Task 11c golden calculations and their invocation are stored in
+`tests/EvoWorld.Tests/Fixtures/neural_mutation_reference.py`.
+
 Statistics retain their existing API and inherited-trait aggregation; measured
-populations may differ because neural control changes behavior. Neural weight
-mutation belongs to Task 11c. Learning, backpropagation and memory remain deferred.
+populations may differ because neural control and mutation change behavior.
+Learning, backpropagation, memory and neural weight statistics remain deferred.
 
 ## Architecture Decisions
 
@@ -312,7 +353,8 @@ double bits calculated independently in Python from Task 2 golden outputs.
 `new Simulation(settings)` owns one persistent PCG32 stream. Initialization uses
 the seeded generator and retains its stream state. `AdvanceTick()` advances
 exactly one configured timestep. Movement and survival consume zero random outputs;
-regeneration consumes two per successful spawn and reproduction six per birth. The engine is
+regeneration consumes two per successful spawn and reproduction six per birth,
+or eighty with active neural mutation. The engine is
 single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
 with `World` and `TickCount`; previous world and simulation snapshots remain valid.
 
@@ -450,7 +492,7 @@ deaths open slots and lower parent IDs get first opportunity. A skipped birth
 deducts no cost, allocates no ID, and consumes no random values. Default births
 conserve energy; a smaller offspring energy loses the difference as overhead.
 
-Each successful birth uses six outputs from the same tentative PCG32 stream,
+The first six outputs of each successful birth use the same tentative PCG32 stream,
 after any food-regeneration draws. First, output / 2^32 is multiplied by 2*pi;
 cosine and sine of this angle are each multiplied by fixed radius 5 and added
 to the parent's post-movement coordinates. Negative candidates clamp to zero;
@@ -463,6 +505,7 @@ cross-runtime bitwise equivalence is not promised.
 Third and fourth outputs determine Speed and Metabolism mutation, respectively.
 They are consumed even when mutation amplitudes are zero.
 Fifth and sixth outputs determine SensingRadius and SteeringRate mutation.
+Active neural mutation then consumes 74 weight draws before offspring construction.
 
 The child receives exactly configured offspring energy and a monotonic ID.
 Its long allocation counter starts at the initial population; custom internal
@@ -514,15 +557,16 @@ non-finite required movement or metabolic products fail the complete transaction
 
 Children inherit the specific parent's values, then mutate only at birth.
 Food draws precede births; every birth draws position, heading, speed mutation,
-metabolism mutation, sensing mutation, then steering mutation. One food and two children consume fourteen
-outputs. Later reproduction histories differ from Task 7 because of these extra
+metabolism mutation, sensing mutation, then steering mutation, followed by 74
+neural weight draws when active. One food and two children consume fourteen
+outputs with neural mutation inactive, or 162 when active. Later reproduction histories differ from Task 7 because of these extra
 draws, while the PCG algorithm and homogeneous initial-world fixtures are unchanged.
 All traits, RNG, and ID counters publish together; failed ticks leak no mutations
 or random draws, and retries start from the same committed state.
 
 Heritable variation may affect survival and reproductive success, allowing
 selection to emerge. Adaptation, improvement, and population survival are not
-guaranteed. No generic genome exists. Neural weight mutation, memory, learning,
+guaranteed. No generic genome exists. Memory, learning,
 sexual reproduction, crossover, speciation, and persistence remain deferred.
 Task 10 implements basic trait-based coloring; advanced trait visualization
 remains deferred.
@@ -580,8 +624,9 @@ consume no RNG and add no separate energy cost.
 Availability is resolved sequentially, but other organisms' updated positions
 never influence steering. All changes, draws, and ID allocations remain tentative
 until the existing single-reference commit; failures and retries preserve the
-complete prior transaction. Six outputs per successful birth extend Task 8's
-first four draws; later reproduction histories shift intentionally. Skipped
+complete prior transaction. The six historical outputs per successful birth extend
+Task 8's first four draws and precede 74 neural mutation draws when active;
+later reproduction histories shift intentionally. Skipped
 births consume zero, and food regeneration still consumes two per successful spawn.
 
 Food seeking is reactive: there is no stored target, memory, route planning, or
@@ -609,8 +654,8 @@ simulation's starting snapshot, and Desktop trait coloring and statistics displa
 Task 11a adds the immutable 6→8→2 NeuralGenome infrastructure with validated
 weights, deterministic forward evaluation, and comprehensive numerical tests.
 Task 11b adds optional neural steering and speed modulation, deterministic
-initial weights, and exact brain inheritance; neural weight mutation is deferred
-to Task 11c.
+initial weights, and exact brain inheritance. Task 11c adds optional deterministic
+neural weight mutation at birth with overflow-safe clamping and transactional RNG.
 
 Additional traits, persistence, and interactive
 configuration remain deferred.

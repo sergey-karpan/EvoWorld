@@ -9,7 +9,7 @@ public class NeuralSettingsTests
     public void EveryLegacySettingsSignaturePreservesFiveNewDefaults()
     {
         var defaults = SimulationSettings.CreateDefault();
-        var constructors = typeof(SimulationSettings).GetConstructors().Where(c => c.GetParameters().Length != 38).ToArray();
+        var constructors = typeof(SimulationSettings).GetConstructors().Where(c => c.GetParameters().Length < 38).ToArray();
         Assert.Equal(new[] { 4, 6, 7, 9, 11, 15, 23, 33 }, constructors.Select(c => c.GetParameters().Length).Order());
         foreach (var constructor in constructors)
         {

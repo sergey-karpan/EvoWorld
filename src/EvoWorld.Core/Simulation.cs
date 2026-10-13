@@ -185,8 +185,12 @@ public sealed class Simulation
                 Settings.MinSensingRadius, Settings.MaxSensingRadius, random.NextUInt());
             var childSteeringRate = TraitVariation.Apply(parent.SteeringRate, Settings.SteeringRateMutationAmplitude,
                 Settings.MinSteeringRate, Settings.MaxSteeringRate, random.NextUInt());
+            var childBrain = Settings.EnableNeuralControl && Settings.NeuralWeightMutationAmplitude > 0
+                ? NeuralMutation.Mutate(parent.Brain, Settings.NeuralWeightMutationAmplitude,
+                    Settings.NeuralWeightMin, Settings.NeuralWeightMax, random)
+                : parent.Brain;
             offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
-                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, parent.Brain));
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, childBrain));
             survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
                 parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain);
             nextOrganismId++;

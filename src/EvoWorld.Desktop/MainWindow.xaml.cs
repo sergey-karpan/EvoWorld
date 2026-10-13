@@ -9,23 +9,29 @@ namespace EvoWorld.Desktop;
 
 public partial class MainWindow : Window
 {
-    private readonly SimulationSettings _settings = SimulationSettings.CreateDefault();
+    private readonly DesktopExperiment _experiment;
     private readonly WorldRenderer _renderer = new();
     private readonly DispatcherTimer _timer;
-    private Simulation _simulation;
+    private Simulation ActiveSimulation => _experiment.Simulation;
     private bool _failed;
     private bool _closed;
     private string _playbackStatus = "Ready";
 
-    public MainWindow()
+    public MainWindow() : this(new DesktopExperiment())
     {
-        _simulation = new Simulation(_settings);
+    }
+
+    internal MainWindow(DesktopExperiment experiment)
+    {
+        _experiment = experiment;
         _timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher)
         {
-            Interval = TimeSpan.FromSeconds(_settings.TickDurationSeconds)
+            Interval = TimeSpan.FromSeconds(ActiveSimulation.Settings.TickDurationSeconds)
         };
         _timer.Tick += Timer_Tick;
         InitializeComponent();
+        MutationSelector.ItemsSource = ExperimentSettings.MutationChoices.ToArray();
+        MutationSelector.SelectedItem = _experiment.PendingOptions.MutationAmplitude;
         TraitSelector.ItemsSource = Enum.GetValues<ColorTrait>();
         TraitSelector.SelectedItem = ColorTrait.None;
         UpdateControls("Ready");
@@ -49,12 +55,12 @@ public partial class MainWindow : Window
         _timer.Stop();
         try
         {
-            _simulation = new Simulation(_settings);
-            _failed = false;
-            UpdateControls("Ready");
-            Viewport.InvalidateVisual();
+            _experiment.Reset();
         }
-        catch (Exception exception) { ShowError("Reset failed", exception); }
+        catch (Exception exception) { ShowError("Reset failed", exception); return; }
+        _failed = false;
+        UpdateControls("Ready");
+        Viewport.InvalidateVisual();
     }
 
     private void Timer_Tick(object? sender, EventArgs e)
@@ -62,7 +68,7 @@ public partial class MainWindow : Window
         if (_closed || _failed || !_timer.IsEnabled) return;
         try
         {
-            _simulation.AdvanceTick(); // One fixed step, no catch-up.
+            ActiveSimulation.AdvanceTick(); // One fixed step, no catch-up.
             UpdateReadout();
             Viewport.InvalidateVisual();
         }
@@ -74,7 +80,7 @@ public partial class MainWindow : Window
         if (_closed || _failed) return;
         try
         {
-            var statistics = _simulation.GetStatistics(out var snapshot);
+            var statistics = ActiveSimulation.GetStatistics(out var snapshot);
             var rendered = _renderer.Draw(e.Surface.Canvas, e.Info.Width, e.Info.Height, snapshot.World, statistics, SelectedTrait);
             StatusText.Text = rendered ? _playbackStatus : "World cannot be displayed at this viewport scale.";
         }
@@ -82,6 +88,27 @@ public partial class MainWindow : Window
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e) => Viewport.InvalidateVisual();
+
+    private void ExperimentSelection_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        // Selection events can occur before InitializeComponent has built every control.
+        if (MutationSelector is null || ConfigurationText is null || MutationSelector.SelectedItem is not double amplitude) return;
+        var controller = ControllerSelector.SelectedIndex == 1 ? ControllerMode.Neural : ControllerMode.RuleBased;
+        _experiment.Select(new ExperimentOptions(controller, amplitude));
+        MutationSelector.IsEnabled = controller == ControllerMode.Neural;
+        UpdateConfigurationReadout();
+    }
+
+    private void UpdateConfigurationReadout()
+    {
+        var settings = ActiveSimulation.Settings;
+        var mode = settings.EnableNeuralControl ? "Neural" : "Rule-based";
+        var enabled = settings.EnableNeuralControl ? "On" : "Off";
+        var mutation = settings.EnableNeuralControl && settings.NeuralWeightMutationAmplitude > 0 ? "enabled" : "off";
+        var pending = _experiment.HasPendingChanges ? " | Pending Reset" : "";
+        ConfigurationText.Text = string.Create(CultureInfo.InvariantCulture,
+            $"Active: {mode} | Neural: {enabled} | Mutation setting: {settings.NeuralWeightMutationAmplitude:G3} ({mutation}){pending}");
+    }
 
     private ColorTrait SelectedTrait => TraitSelector.SelectedItem is ColorTrait trait ? trait : ColorTrait.None;
 
@@ -98,12 +125,13 @@ public partial class MainWindow : Window
         StartButton.IsEnabled = !_failed && !_timer.IsEnabled;
         PauseButton.IsEnabled = _timer.IsEnabled;
         UpdateReadout();
+        UpdateConfigurationReadout();
         StatusText.Text = status;
     }
 
     private void UpdateReadout()
     {
-        var statistics = _simulation.GetStatistics();
+        var statistics = ActiveSimulation.GetStatistics();
         TickText.Text = $"Tick: {statistics.TickCount} | Organisms: {statistics.OrganismCount} | Food: {statistics.FoodCount}";
         var trait = SelectedTrait;
         var moments = trait switch

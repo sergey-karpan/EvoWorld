@@ -81,8 +81,40 @@ is 10. Draw order is background, boundary, food, organisms, then headings.
 
 Start enables one UI-thread dispatcher timer; its first callback advances one
 fixed simulation step. Pause preserves the current world. Start resumes it.
-Reset stops playback and recreates the original world with the same settings and
-seed, at tick zero, ready to start. Closing stops and detaches the timer.
+Reset stops playback and recreates the world from the selected controller and
+mutation settings with the same seed, at tick zero, ready to start.
+Closing stops and detaches the timer.
+
+Task 11d adds the toolbar choices `Rule-based (Task 9)` and
+`Neural (Tasks 11b–11c)`. The initial active mode is rule-based. Neural mutation
+choices are 0 (off), 0.05, 0.1 and 0.5, initially selecting 0.1 for the demonstration;
+the amplitude selector is enabled only while Neural is selected. Active mode,
+neural enable state and the mutation setting are shown separately from pending
+selections. The controller tooltip says `Changes take effect on Reset.`
+
+Selections never change the current simulation, world, RNG or tick count.
+`Pending Reset` appears when the effective selection differs from the active
+configuration. Start/Resume and Pause operate on the active experiment and keep
+changes pending. Reset always constructs a new simulation, even with unchanged
+selections, and leaves it paused at tick zero. A construction failure preserves
+the prior simulation and pending choices, reports an inline error, and requires
+a successful Reset to recover. Reverting selections to the active configuration
+removes the pending difference. Trait coloring and resize never restart the run.
+
+Desktop forwards Core defaults through one explicit settings mapper, overriding
+only neural enable and birth-time mutation. Rule-based mode uses mutation 0;
+Neural mode retains Core's actual positive initial-weight variation (currently
+0.5), including when birth-time mutation is 0. All other settings and the seed
+remain the same. Identical selections and Reset reproduce histories on the
+supported runtime; modes can have different histories because neural initialization
+consumes extra draws. The mutation readout is a setting, not evidence of births
+or observed mutation. Weight mutation at birth is not individual learning;
+Desktop changes no Core defaults and performs no neural training.
+
+Settings mapping and pending/active ownership are source-linked into Tests using
+the existing viewport-helper pattern, without a WPF or Desktop assembly reference.
+A narrow Desktop-only construction delegate tests failed Reset without modifying
+Core or adding a UI testing framework.
 
 The nominal interval is 1/30 real second. Delayed callbacks skip missed intervals;
 there is intentionally no catch-up or elapsed-time accumulation. Each callback
@@ -656,9 +688,10 @@ weights, deterministic forward evaluation, and comprehensive numerical tests.
 Task 11b adds optional neural steering and speed modulation, deterministic
 initial weights, and exact brain inheritance. Task 11c adds optional deterministic
 neural weight mutation at birth with overflow-safe clamping and transactional RNG.
+Task 11d adds Desktop controller and mutation choices with explicit Reset-to-apply
+configuration and reproducible successive experiments.
 
-Additional traits, persistence, and interactive
-configuration remain deferred.
+Additional traits, persistence, and a full configuration editor remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

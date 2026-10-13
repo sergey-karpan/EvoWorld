@@ -10,6 +10,8 @@ public sealed class Simulation
     internal const double OffspringHeadingOffsetMaxRadians = 0.1;
     private Advancement _advancement;
     private readonly long _regenerationTicks;
+    private readonly int _startingOrganismCount;
+    private readonly long _startingNextOrganismId;
 
     public SimulationSettings Settings { get; }
     public SimulationState State => _advancement.State;
@@ -32,6 +34,8 @@ public sealed class Simulation
         var random = new Pcg32(settings.Seed);
         var state = new SimulationState(WorldInitializer.Create(settings, random), 0);
         _advancement = new(state, random.CaptureState(), settings.InitialFoodCount, settings.InitialOrganismCount);
+        _startingOrganismCount = state.World.Organisms.Count;
+        _startingNextOrganismId = _advancement.NextOrganismId;
     }
 
     // Test-only starting snapshot seam: immutable input, validated invariants,
@@ -56,6 +60,32 @@ public sealed class Simulation
         if (nextOrganism < minimumOrganismId || nextOrganism > int.MaxValue + 1L)
             throw new ArgumentOutOfRangeException(nameof(nextOrganismId));
         _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId, nextOrganism);
+        _startingOrganismCount = world.Organisms.Count;
+        _startingNextOrganismId = nextOrganism;
+    }
+
+    /// <summary>Computes deterministic, allocation-light O(n) statistics without consuming random outputs.</summary>
+    public PopulationStatistics GetStatistics() => GetStatistics(out _);
+
+    /// <summary>Also returns the exact committed snapshot used for the observations, for consistent rendering.
+    /// Call between completed ticks; the simulation remains single-threaded and not thread-safe.</summary>
+    public PopulationStatistics GetStatistics(out SimulationState snapshot)
+    {
+        var advancement = _advancement;
+        snapshot = advancement.State;
+        long births, deaths;
+        try
+        {
+            births = checked(advancement.NextOrganismId - _startingNextOrganismId);
+            deaths = checked((long)_startingOrganismCount + births - snapshot.World.Organisms.Count);
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException("Population history exceeds its invariant bounds.", exception);
+        }
+        if (births < 0 || deaths < 0)
+            throw new InvalidOperationException("Population history cannot contain negative births or deaths.");
+        return new PopulationStatistics(snapshot, births, deaths);
     }
 
     public void AdvanceTick()

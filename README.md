@@ -6,8 +6,9 @@ A 2D artificial-life and evolution simulator built with C# and .NET 10.
 
 EvoWorld explores how complex behavior and evolutionary adaptation can emerge
 from simple rules governing virtual organisms and their environment.
-The long-term goal is an ecosystem where organisms move, consume energy, find
-food, reproduce, inherit traits, mutate, and evolve through natural selection.
+Organisms move, consume energy, find food, reproduce, inherit traits, and mutate,
+allowing evolution through natural selection. Richer ecosystems and emergent
+behavior remain long-term goals.
 
 ## Technology Stack
 
@@ -99,21 +100,64 @@ Simulation or drawing errors stop playback and show a single inline error state.
 Reset permits recovery; deterministic failures are not automatically retried.
 Task 4.5 adds visualization and playback, without changing simulation behavior.
 
+## Population Statistics
+
+Task 10 makes evolutionary dynamics observable without producing new behavior.
+`Simulation.GetStatistics()` returns an immutable `PopulationStatistics` value:
+committed `TickCount`, current `OrganismCount` and `FoodCount`, `TotalBirths` and
+`TotalDeaths`, plus `TraitStatistics` for Speed, Metabolism, SensingRadius and
+SteeringRate. Each trait contains `Min`, `Max`, `Mean`, population
+`StandardDeviation` (denominator `Count`) and `Count`. An empty population has
+exact zero values in every trait field; identical values have exact zero deviation.
+
+Births are current next-organism ID minus the immutable starting next-ID baseline.
+Deaths are actual starting organism count plus births minus current count. Both
+baselines are captured after constructor overrides: sparse IDs, high injected
+counters and a custom population differing from configured counts do not imply
+events before injection. Counters describe events since this instance's starting
+snapshot. Checked long arithmetic and nonnegative invariant checks reject impossible
+histories. Baselines never change during ticks.
+
+The calculation captures one advancement reference and consumes zero RNG outputs.
+It uses three ordered passes per trait: extrema, compensated mean of offsets scaled
+by the range, then compensated squared deviations in that scaled space. Scaling
+back only at the end avoids overflowing sums and squares, including near
+`double.MaxValue`, and retains small spreads near large values. Computation is
+O(n), with constant temporary storage and no per-organism allocations, sorting,
+cache or tick-pipeline tracking. Like advancement, reading is single-threaded and
+supported between completed ticks, with no concurrent advancement guarantee.
+`GetStatistics(out SimulationState snapshot)` also returns the exact snapshot
+used, allowing rendering to pair world and observations consistently.
+
+Desktop's toolbar selector offers None (original cyan), Speed, Metabolism,
+SensingRadius, SteeringRate and Energy. Selected values use the current population's
+range for a blue-to-red gradient; equal values use neutral cyan. Genetic ranges
+come from matching statistics; energy bounds come directly from the same captured
+world. The compact summary shows the selected genetic trait's mean and deviation
+(Speed for None/Energy), births and deaths, including after paused Reset.
+These controls only observe the simulation.
+
+There is no learning, fitness tracking or per-lineage measurement. Histograms,
+correlations, lineage and generational statistics, neural networks, predators and
+visualization beyond simple coloring remain deferred. Measurement does not itself
+cause evolution or guarantee an adaptive result.
+
 ## Architecture Decisions
 
-PCG32, immutable configuration, world creation, and fixed-step movement are
-implemented. Further ecosystem behavior remains planned. Basic dispatcher
-playback is implemented.
+PCG32, immutable configuration, world creation, fixed-step movement, survival,
+food regeneration, reproduction, trait mutation, reactive food seeking, and
+population statistics are implemented. Desktop provides dispatcher playback and
+trait coloring. Further ecosystem behavior remains planned.
 
-- Core will own world state, entities, rules, simulation time, RNG, energy, and
-  collision calculations. Desktop will own controls, rendering, viewport
-  transformations, and playback scheduling. Rendering will never modify state
-  or consume simulation RNG values. Initial execution may use the WPF UI thread.
+- Core owns world state, entities, rules, simulation time, RNG, energy, and
+  collision calculations. Desktop owns controls, rendering, viewport
+  transformations, and playback scheduling. Rendering does not modify state
+  or consume simulation RNG values. Desktop simulation execution uses the WPF UI thread.
 - For a given implementation and supported execution environment, identical
   initial conditions, configuration, seed, and tick count must reproduce results.
   This is not a guarantee of bitwise equality across all hardware or runtimes.
 - Random generation uses **PCG-XSH-RR 64/32, setseq (PCG32)** rather than
-  `System.Random`. The simulation engine will own the RNG. The `ulong` seed is
+  `System.Random`. The simulation engine owns the RNG. The `ulong` seed is
   `initstate`, stored in `SimulationSettings`; the fixed stream is `initseq = 1`.
   Zero is a valid seed and receives the standard initialization sequence.
 - PCG32 uses 64-bit state, 32-bit output, multiplier `6364136223846793005`,
@@ -128,26 +172,28 @@ playback is implemented.
 - Golden-sequence tests verify initialization and outputs for seeds 0, 1, 42,
   12345678901234567890, and `ulong.MaxValue`. Values were generated by compiling
   the official [PCG C basic reference](https://github.com/imneme/pcg-c-basic/tree/bc39cd76ac3d541e618606bcc6e1e5ba5e5e6aa3),
-  independently of the production C# implementation. Organisms and rendering will not own RNGs, and
-  seeds will not be derived from wall-clock time.
+  independently of the production C# implementation. Organisms and rendering do not own RNGs, and
+  seeds are not derived from wall-clock time.
 - Simulation uses a configurable fixed timestep, initially `1/30` simulated
   second, independent of rendering. Stable entity and event ordering, explicit
   resource tie-breaking, and no outcome-affecting unordered or parallel processing
-  will support reproducibility. Core will not depend on wall-clock time.
+  support reproducibility. Core does not depend on wall-clock time.
 - `SimulationSettings` is an immutable sealed class holding a `ulong` seed,
   tick duration in seconds, and world width/height as doubles. Continuous values
-  must be finite and positive; zero is a valid seed. `CreateDefault()` uses seed
+  for timestep and world dimensions must be finite and positive; traits and
+  variation amplitudes permit zero. Zero is a valid seed. `CreateDefault()` uses seed
   42, timestep `1.0 / 30.0`, and world dimensions 1000 by 700.
   Initial counts default to 20 organisms and 100 food items; zero is supported
   and negative counts are rejected. The four-argument constructor retains its
   existing values and delegates using these same default counts.
-  Constant `OrganismSpeed` defaults to 50 world units per simulated second.
+  Baseline `OrganismSpeed` defaults to 50 world units per simulated second;
+  movement uses each organism's inherited and potentially mutated Speed.
   Four- and six-argument constructors retain this default; a seven-argument
   constructor accepts explicit finite, nonnegative speed, including zero.
   Simulation time is represented by a `long TickCount` and the configured timestep.
-- Playback speed will control steps per real second, never the physical timestep.
-  Pause will stop advancement; resume will discard paused elapsed time. Reset with
-  identical settings and seed will reproduce the initial state and subsequent
+- Future playback-speed controls will change steps per real second, never the physical timestep.
+  Pause stops advancement; resume discards paused elapsed time. Reset with
+  identical settings and seed reproduces the initial state and subsequent
   sequence. A future `SimulationRunner` will manage accumulation and catch-up limits.
 
 ## Initial World Creation
@@ -158,8 +204,10 @@ and stable IDs starting at zero separately in each category. World collections
 own defensive copies behind read-only views; ordinary reads do not copy.
 
 A fresh PCG32 consumes X, Y, heading for each organism in ascending ID order,
-then X, Y for each food item in ascending ID order. The total is exactly
-`3 * InitialOrganismCount + 2 * InitialFoodCount` outputs, with no placement retries.
+then X, Y for each food item in ascending ID order. Placement consumes exactly
+`3 * InitialOrganismCount + 2 * InitialFoodCount` outputs, with no retries.
+This is also the total when all initial trait variation amplitudes are zero;
+enabled variation phases add the draws documented below.
 IDs and initial energies (organisms: 100; food: 20) consume no random outputs.
 Overlaps are allowed. Coordinates use `output / 4294967296.0 * dimension`;
 headings use the same conversion scaled by `2 * Math.PI`.
@@ -292,8 +340,8 @@ before replacing that single reference. Failures after tentative draws or feedin
 leave every committed component unchanged, and retries start from the same stream.
 The application remains single-threaded; no locks or background scheduling exist.
 
-Food regeneration supplies a renewable resource but does not guarantee a living
-population: organisms still have no food-seeking behavior.
+Food regeneration supplies a renewable resource. Task 9 implemented reactive
+food seeking, but regeneration alone does not guarantee population survival.
 Existing movement/reflection and binary64 distance limitations still apply.
 
 ## Asexual Reproduction
@@ -358,7 +406,8 @@ nonnegative, each minimum must be below its maximum, and baselines must lie
 within explicitly supplied ranges. Earlier constructors expand upper bounds to
 include large legacy baselines instead of clamping or rejecting them.
 
-With both initial amplitudes zero, original Task 3 placement, headings, food,
+With both initial amplitudes zero and sensing/steering variation disabled,
+original Task 3 placement, headings, food,
 and RNG state are preserved: 3 draws per organism and 2 per food. If either
 amplitude is nonzero, complete all original placement first, then draw speed
 and metabolism variation for each organism in ID order. This consumes two extra
@@ -384,8 +433,9 @@ or random draws, and retries start from the same committed state.
 Heritable variation may affect survival and reproductive success, allowing
 selection to emerge. Adaptation, improvement, and population survival are not
 guaranteed. No generic genome exists. Neural networks, memory, learning,
-sexual reproduction, crossover, speciation,
-trait visualization, and persistence remain deferred.
+sexual reproduction, crossover, speciation, and persistence remain deferred.
+Task 10 implements basic trait-based coloring; advanced trait visualization
+remains deferred.
 
 ## Reactive Sensing and Food Seeking
 
@@ -447,7 +497,7 @@ births consume zero, and food regeneration still consumes two per successful spa
 Food seeking is reactive: there is no stored target, memory, route planning, or
 learning. Selection may affect sensory traits over generations, without guaranteed
 adaptation. Multiple sensors, predator/prey behavior, obstacle avoidance, flocking,
-pathfinding, learning, sexual reproduction, visualization additions, and persistence
+pathfinding, learning, sexual reproduction, advanced visualization, and persistence
 remain deferred.
 
 ## Development Status
@@ -464,6 +514,8 @@ Task 6 adds deterministic food regeneration with transactional RNG and ID histor
 Task 7 adds asexual reproduction, energy transfer, and bounded heading variation.
 Task 8 adds individual Speed and Metabolism with inheritance and bounded mutation.
 Task 9 adds individual sensing and steering with reactive food seeking.
+Task 10 adds population statistics, derived birth/death counters since each
+simulation's starting snapshot, and Desktop trait coloring and statistics display.
 Additional traits, persistence, and interactive
 configuration remain deferred.
 

@@ -11,7 +11,8 @@ internal sealed class WorldRenderer : IDisposable
     private readonly SKPaint _organism = new() { Color = new SKColor(65, 201, 235), IsAntialias = true };
     private readonly SKPaint _heading = new() { Color = new SKColor(222, 247, 255), StrokeWidth = 1.5f, IsAntialias = true };
 
-    public bool Draw(SKCanvas canvas, int width, int height, WorldState world)
+    public bool Draw(SKCanvas canvas, int width, int height, WorldState world,
+        PopulationStatistics statistics = default, ColorTrait trait = ColorTrait.None)
     {
         canvas.Clear(new SKColor(21, 27, 36));
         if (!ViewportTransform.TryCreate(world.WorldWidth, world.WorldHeight, width, height, out var view))
@@ -28,8 +29,12 @@ internal sealed class WorldRenderer : IDisposable
             // Stable draw order: background, boundary, food, organisms, headings.
             foreach (var food in world.FoodItems)
                 canvas.DrawCircle((float)food.X, (float)food.Y, 3, _food);
+            var (min, max) = OrganismColoring.Bounds(world, statistics, trait);
             foreach (var organism in world.Organisms)
+            {
+                _organism.Color = OrganismColoring.Color(OrganismColoring.Value(organism, trait), min, max, trait);
                 canvas.DrawCircle((float)organism.X, (float)organism.Y, 5, _organism);
+            }
             foreach (var organism in world.Organisms)
                 canvas.DrawLine((float)organism.X, (float)organism.Y,
                     (float)(organism.X + 10 * Math.Cos(organism.HeadingRadians)),

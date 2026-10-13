@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Globalization;
 using System.Windows.Threading;
 using EvoWorld.Core;
 using SkiaSharp.Views.Desktop;
@@ -24,6 +26,8 @@ public partial class MainWindow : Window
         };
         _timer.Tick += Timer_Tick;
         InitializeComponent();
+        TraitSelector.ItemsSource = Enum.GetValues<ColorTrait>();
+        TraitSelector.SelectedItem = ColorTrait.None;
         UpdateControls("Ready");
     }
 
@@ -70,14 +74,23 @@ public partial class MainWindow : Window
         if (_closed || _failed) return;
         try
         {
-            var snapshot = _simulation.State;
-            var rendered = _renderer.Draw(e.Surface.Canvas, e.Info.Width, e.Info.Height, snapshot.World);
+            var statistics = _simulation.GetStatistics(out var snapshot);
+            var rendered = _renderer.Draw(e.Surface.Canvas, e.Info.Width, e.Info.Height, snapshot.World, statistics, SelectedTrait);
             StatusText.Text = rendered ? _playbackStatus : "World cannot be displayed at this viewport scale.";
         }
         catch (Exception exception) { ShowError("Drawing stopped", exception); }
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e) => Viewport.InvalidateVisual();
+
+    private ColorTrait SelectedTrait => TraitSelector.SelectedItem is ColorTrait trait ? trait : ColorTrait.None;
+
+    private void TraitSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (Viewport is null || StatisticsText is null) return;
+        UpdateReadout();
+        Viewport.InvalidateVisual();
+    }
 
     private void UpdateControls(string status)
     {
@@ -90,8 +103,19 @@ public partial class MainWindow : Window
 
     private void UpdateReadout()
     {
-        var snapshot = _simulation.State;
-        TickText.Text = $"Tick: {snapshot.TickCount} | Organisms: {snapshot.World.Organisms.Count} | Food: {snapshot.World.FoodItems.Count}";
+        var statistics = _simulation.GetStatistics();
+        TickText.Text = $"Tick: {statistics.TickCount} | Organisms: {statistics.OrganismCount} | Food: {statistics.FoodCount}";
+        var trait = SelectedTrait;
+        var moments = trait switch
+        {
+            ColorTrait.Metabolism => statistics.Metabolism,
+            ColorTrait.SensingRadius => statistics.SensingRadius,
+            ColorTrait.SteeringRate => statistics.SteeringRate,
+            _ => statistics.Speed
+        };
+        var label = trait is ColorTrait.None or ColorTrait.Energy ? "Speed" : trait.ToString();
+        StatisticsText.Text = string.Create(CultureInfo.InvariantCulture,
+            $"{label}: {moments.Mean:G4} ± {moments.StandardDeviation:G4} | Births: {statistics.TotalBirths} | Deaths: {statistics.TotalDeaths}");
     }
 
     private void ShowError(string context, Exception exception)

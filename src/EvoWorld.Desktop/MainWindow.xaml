@@ -10,6 +10,9 @@
             <Button x:Name="PauseButton" Content="Pause" Click="Pause_Click" Padding="16,6" Margin="0,0,8,0" IsEnabled="False" />
             <Button Content="Reset" Click="Reset_Click" Padding="16,6" Margin="0,0,16,0" />
             <TextBlock x:Name="TickText" Text="Tick: 0" Foreground="White" VerticalAlignment="Center" />
+            <ComboBox x:Name="TraitSelector" Width="130" Margin="12,0,0,0" VerticalAlignment="Center"
+                      ToolTip="Organism color trait" SelectionChanged="TraitSelector_SelectionChanged" />
+            <TextBlock x:Name="StatisticsText" Foreground="#C4CFDC" Margin="12,0,0,0" VerticalAlignment="Center" />
         </WrapPanel>
         <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Text="Ready" Foreground="#C4CFDC" Margin="12,8" TextWrapping="Wrap" />
         <skia:SKElement x:Name="Viewport" PaintSurface="Viewport_PaintSurface" SizeChanged="Viewport_SizeChanged" />

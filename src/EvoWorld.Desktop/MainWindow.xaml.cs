@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         };
         _timer.Tick += Timer_Tick;
         InitializeComponent();
+        UpdateControls("Ready");
     }
 
     private void Start_Click(object sender, RoutedEventArgs e)
@@ -58,7 +59,7 @@ public partial class MainWindow : Window
         try
         {
             _simulation.AdvanceTick(); // One fixed step, no catch-up.
-            TickText.Text = $"Tick: {_simulation.TickCount}";
+            UpdateReadout();
             Viewport.InvalidateVisual();
         }
         catch (Exception exception) { ShowError("Simulation stopped", exception); }
@@ -83,8 +84,14 @@ public partial class MainWindow : Window
         _playbackStatus = status;
         StartButton.IsEnabled = !_failed && !_timer.IsEnabled;
         PauseButton.IsEnabled = _timer.IsEnabled;
-        TickText.Text = $"Tick: {_simulation.TickCount}";
+        UpdateReadout();
         StatusText.Text = status;
+    }
+
+    private void UpdateReadout()
+    {
+        var snapshot = _simulation.State;
+        TickText.Text = $"Tick: {snapshot.TickCount} | Organisms: {snapshot.World.Organisms.Count} | Food: {snapshot.World.FoodItems.Count}";
     }
 
     private void ShowError(string context, Exception exception)

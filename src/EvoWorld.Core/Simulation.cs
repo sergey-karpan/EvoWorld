@@ -22,7 +22,8 @@ public sealed class Simulation
     }
 
     // Test-only starting snapshot seam: immutable input, validated invariants,
-    // and the same post-initialization RNG as the public constructor.
+    // and the same post-initialization RNG as the public constructor. Counts may
+    // shrink and IDs may have gaps after removal; no new entities are allowed.
     internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0)
         : this(settings)
     {
@@ -36,14 +37,25 @@ public sealed class Simulation
     {
         var previous = _state;
         var nextTick = checked(previous.TickCount + 1);
-        var distance = Settings.OrganismSpeed * Settings.TickDurationSeconds;
-        if (!double.IsFinite(distance))
-            throw new OverflowException("Movement distance must be finite.");
+        var energyCost = Settings.OrganismEnergyDrainPerSecond * Settings.TickDurationSeconds;
+        if (!double.IsFinite(energyCost))
+            throw new OverflowException("Energy cost must be finite.");
 
-        var moved = new Organism[previous.World.Organisms.Count];
-        for (var index = 0; index < moved.Length; index++)
+        var survivors = new List<Organism>(previous.World.Organisms.Count);
+        var foodItems = previous.World.FoodItems;
+        var consumed = new bool[foodItems.Count];
+        var radius = FoodDistance.FromLength(Settings.FoodPickupRadius);
+        for (var index = 0; index < previous.World.Organisms.Count; index++)
         {
             var organism = previous.World.Organisms[index];
+            var energy = organism.Energy - energyCost;
+            if (!double.IsFinite(energy))
+                throw new OverflowException("Organism energy after drain must be finite.");
+            if (energy <= 0.0) continue; // Death precedes movement and feeding.
+
+            var distance = Settings.OrganismSpeed * Settings.TickDurationSeconds;
+            if (!double.IsFinite(distance))
+                throw new OverflowException("Movement distance must be finite.");
             var (cosine, sine) = Direction(organism.HeadingRadians);
             var x = BoundaryReflection.Reflect(organism.X, cosine * distance, Settings.WorldWidth);
             var y = BoundaryReflection.Reflect(organism.Y, sine * distance, Settings.WorldHeight);
@@ -54,12 +66,37 @@ public sealed class Simulation
                 heading = Normalize(Math.PI - heading);
             else if (y.Reflected)
                 heading = Normalize(-heading);
-            moved[index] = new Organism(organism.Id, x.Position, y.Position, heading, organism.Energy);
+            var selected = -1;
+            var closest = default(FoodDistance);
+            for (var foodIndex = 0; foodIndex < foodItems.Count; foodIndex++)
+            {
+                if (consumed[foodIndex]) continue;
+                var food = foodItems[foodIndex];
+                var separation = FoodDistance.Between(x.Position, y.Position, food.X, food.Y);
+                if (separation.CompareTo(radius) > 0) continue;
+                if (selected < 0 || separation.CompareTo(closest) < 0
+                    || (separation.CompareTo(closest) == 0 && food.Id < foodItems[selected].Id))
+                {
+                    selected = foodIndex;
+                    closest = separation;
+                }
+            }
+            if (selected >= 0)
+            {
+                energy += foodItems[selected].Energy;
+                if (!double.IsFinite(energy))
+                    throw new OverflowException("Organism energy after feeding must be finite.");
+                consumed[selected] = true;
+            }
+            survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy));
         }
 
-        var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight, moved, previous.World.FoodItems);
+        var remainingFood = new List<Food>(foodItems.Count);
+        for (var index = 0; index < foodItems.Count; index++)
+            if (!consumed[index]) remainingFood.Add(foodItems[index]);
+        var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight, survivors, remainingFood);
         var next = new SimulationState(world, nextTick);
-        _state = next; // Commit only after all fallible work. Movement never uses _random.
+        _state = next; // Sole commit; movement and survival never use _random.
     }
 
     private static (double Cosine, double Sine) Direction(double heading)
@@ -83,12 +120,13 @@ public sealed class Simulation
     private static void ValidateStartingWorld(SimulationSettings settings, WorldState world)
     {
         if (world.WorldWidth != settings.WorldWidth || world.WorldHeight != settings.WorldHeight
-            || world.Organisms.Count != settings.InitialOrganismCount || world.FoodItems.Count != settings.InitialFoodCount)
-            throw new ArgumentException("Starting world must match settings dimensions and counts.", nameof(world));
+            || world.Organisms.Count > settings.InitialOrganismCount || world.FoodItems.Count > settings.InitialFoodCount)
+            throw new ArgumentException("Starting world must match dimensions and not exceed initial counts.", nameof(world));
         for (var i = 0; i < world.Organisms.Count; i++)
         {
             var entity = world.Organisms[i];
-            if (entity.Id != i || !ValidPosition(entity.X, entity.Y, world)
+            if (entity.Id < 0 || (i > 0 && entity.Id <= world.Organisms[i - 1].Id)
+                || !ValidPosition(entity.X, entity.Y, world)
                 || !double.IsFinite(entity.HeadingRadians) || entity.HeadingRadians < 0.0
                 || entity.HeadingRadians >= 2.0 * Math.PI || !double.IsFinite(entity.Energy) || entity.Energy <= 0.0)
                 throw new ArgumentException("Starting organisms must satisfy world invariants.", nameof(world));
@@ -96,7 +134,8 @@ public sealed class Simulation
         for (var i = 0; i < world.FoodItems.Count; i++)
         {
             var entity = world.FoodItems[i];
-            if (entity.Id != i || !ValidPosition(entity.X, entity.Y, world)
+            if (entity.Id < 0 || (i > 0 && entity.Id <= world.FoodItems[i - 1].Id)
+                || !ValidPosition(entity.X, entity.Y, world)
                 || !double.IsFinite(entity.Energy) || entity.Energy <= 0.0)
                 throw new ArgumentException("Starting food must satisfy world invariants.", nameof(world));
         }

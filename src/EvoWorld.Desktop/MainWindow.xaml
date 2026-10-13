@@ -5,12 +5,12 @@
         Title="EvoWorld" Width="960" Height="760" MinWidth="420" MinHeight="320"
         WindowStartupLocation="CenterScreen" Background="#151B24">
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="12">
+        <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="12">
             <Button x:Name="StartButton" Content="Start" Click="Start_Click" Padding="16,6" Margin="0,0,8,0" />
             <Button x:Name="PauseButton" Content="Pause" Click="Pause_Click" Padding="16,6" Margin="0,0,8,0" IsEnabled="False" />
             <Button Content="Reset" Click="Reset_Click" Padding="16,6" Margin="0,0,16,0" />
             <TextBlock x:Name="TickText" Text="Tick: 0" Foreground="White" VerticalAlignment="Center" />
-        </StackPanel>
+        </WrapPanel>
         <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Text="Ready" Foreground="#C4CFDC" Margin="12,8" TextWrapping="Wrap" />
         <skia:SKElement x:Name="Viewport" PaintSurface="Viewport_PaintSurface" SizeChanged="Viewport_SizeChanged" />
     </DockPanel>

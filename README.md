@@ -74,7 +74,7 @@ dotnet run --project src/EvoWorld.Desktop/EvoWorld.Desktop.csproj --no-build
 ```
 
 The window initially displays the seed-42 world at tick zero: 20 cyan organisms
-with heading indicators and 100 stationary green food items inside a dark world
+with heading indicators and 100 green food items inside a dark world
 rectangle. Organism radius is 5 world units, food radius is 3, and heading length
 is 10. Draw order is background, boundary, food, organisms, then headings.
 
@@ -183,7 +183,7 @@ for X/Y displacement. Exact cardinal headings use exact axis components to avoid
 spurious perpendicular motion along walls. Reflection reverses the perpendicular
 direction component; headings without a net reversal are preserved exactly.
 Exact endpoint hits point inward. Upper-wall positions use `Math.BitDecrement`
-to preserve the half-open world bounds. Food and all energy values stay unchanged.
+to preserve the half-open world bounds. Surviving organisms retain these movement rules.
 
 Reflection has bounded work independent of bounce count. Interior candidates use
 ordinary floating-point addition. Boundary calculations align the original
@@ -203,6 +203,50 @@ before replacing one state reference, so failed ticks preserve world, count, and
 RNG. Floating-point/trigonometric behavior outside the supported execution
 environment is not claimed to be universally bitwise identical.
 
+## Survival Rules
+
+`OrganismEnergyDrainPerSecond` defaults to 1 energy unit per simulated second;
+`FoodPickupRadius` defaults to 8 world units between centers. Both are immutable,
+finite, and nonnegative. Four-, six-, and seven-argument settings constructors
+retain their earlier parameters and use these defaults. The nine-argument overload
+allows explicit values, including zero. Initial energies remain 100 and 20.
+
+Each tick processes organisms in ascending stable ID order:
+
+1. Subtract drain rate times configured timestep, even when stationary.
+2. Remove organisms with energy at or below zero; they neither move nor feed.
+3. Move surviving organisms from their previous positions and reflect boundaries.
+4. At the resulting position, claim at most one currently available food item
+   within the inclusive pickup radius: nearest distance, then smallest food ID
+   when computed distances are exactly equal.
+5. Add that food's energy without an energy cap and create a replacement organism.
+6. Build surviving-organism and unconsumed-food collections, then publish one
+   complete immutable snapshot with the incremented tick count.
+
+An exhausted organism cannot be rescued by food that tick. Earlier organism IDs
+get first opportunity at contested food; later organisms search only unclaimed
+food. Movement never depends on positions updated earlier in the tick. Food stays
+stationary until consumed. Unconsumed food objects are reused. IDs remain stable,
+may have gaps, and are never renumbered. An extinct world continues ticking.
+The internal test constructor accepts shrinking counts and strictly ascending,
+unique, nonnegative IDs, while rejecting counts above configured initial counts.
+
+Energy cost, subtraction, and gain must remain finite; invalid arithmetic throws
+`OverflowException` before publication. A failure after earlier deaths or food
+claims leaves state, collections, tick count, and RNG unchanged. Survival consumes
+zero random outputs and does not change initialization or movement fixtures.
+Pause consumes no energy; Reset restores initial energies and populations.
+The Desktop readout uses committed tick, organism, and food counts. The existing
+renderer naturally omits consumed food and dead organisms.
+
+Distances use .NET 10 `double.Hypot` on power-of-two-scaled coordinate differences,
+retaining a separate exponent for comparisons. This avoids squaring overflow,
+final-distance overflow, and subnormal rounding to a false coincidence or tie.
+Zero radius requires identical coordinates. Comparisons use binary64 precision
+without epsilon tolerances; this is not arbitrary-precision geometry or a promise
+of bitwise portability across runtimes. Any non-finite normalized distance fails
+atomically. Task 4's documented reflection limitations still apply.
+
 ## Development Status
 
 Task 1 established the solution structure, WPF application shell, dependency
@@ -211,9 +255,10 @@ state snapshots, capture/restore, and validated immutable `SimulationSettings`,
 with golden-sequence and configuration tests. Task 3 adds immutable organisms,
 food, world snapshots, population configuration, and deterministic initialization.
 Task 4 adds constant-speed fixed-step movement, reflection, and immutable
-simulation snapshots. Energy expenditure, food consumption, death, reproduction,
-and evolution remain unimplemented. Task 4.5 adds world rendering and basic
-playback controls.
+simulation snapshots. Task 4.5 adds world rendering and basic playback controls.
+Task 5 adds baseline metabolism, food consumption, energy recovery, and death.
+Food regeneration, reproduction, genetic inheritance, mutation, steering and
+food-seeking, advanced metabolism, and evolution remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

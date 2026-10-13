@@ -174,9 +174,13 @@ public class MovementTests
     internal static Simulation Make(double x, double y, double heading, double speed, double duration,
         double width = 10, double height = 10)
     {
-        var settings = new SimulationSettings(42UL, duration, width, height, 1, 1, speed);
+        // Movement-only fixtures disable metabolism and avoid coincident food.
+        // An epsilon-sized world has only coordinate zero, so it contains no food.
+        Food[] food = width == double.Epsilon && height == double.Epsilon
+            ? [] : [new Food(0, width / 3, height / 3, 20)];
+        var settings = new SimulationSettings(42UL, duration, width, height, 1, food.Length, speed, 0, 0);
         var world = new WorldState(width, height,
-            [new Organism(0, x, y, heading, 100)], [new Food(0, 0, 0, 20)]);
+            [new Organism(0, x, y, heading, 100)], food);
         return new Simulation(settings, world);
     }
 }

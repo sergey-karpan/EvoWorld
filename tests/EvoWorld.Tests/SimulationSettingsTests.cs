@@ -5,6 +5,53 @@ namespace EvoWorld.Tests;
 
 public class SimulationSettingsTests
 {
+    [Fact]
+    public void AllCompatibleConstructorsUseSurvivalDefaults()
+    {
+        SimulationSettings[] settings = [new(42, 1, 10, 10), new(42, 1, 10, 10, 0, 0),
+            new(42, 1, 10, 10, 0, 0, 0), SimulationSettings.CreateDefault()];
+        foreach (var value in settings)
+        {
+            Assert.Equal(1.0, value.OrganismEnergyDrainPerSecond);
+            Assert.Equal(8.0, value.FoodPickupRadius);
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(12.5)]
+    [InlineData(double.MaxValue)]
+    public void ExplicitSurvivalValuesArePreserved(double value)
+    {
+        var settings = new SimulationSettings(42, 1, 10, 10, 0, 0, 0, value, value);
+        Assert.Equal(value, settings.OrganismEnergyDrainPerSecond);
+        Assert.Equal(value, settings.FoodPickupRadius);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void InvalidSurvivalValuesIdentifyCorrectParameters(double value)
+    {
+        Assert.Equal("organismEnergyDrainPerSecond", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42, 1, 10, 10, 0, 0, 0, value, 0)).ParamName);
+        Assert.Equal("foodPickupRadius", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, value)).ParamName);
+    }
+
+    [Fact]
+    public void NineArgumentConstructorRetainsEarlierValidation()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 0, 10, 10, 0, 0, 0, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 1, 0, 10, 0, 0, 0, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 1, 10, 0, 0, 0, 0, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 1, 10, 10, -1, 0, 0, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 1, 10, 10, 0, -1, 0, 0, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SimulationSettings(42, 1, 10, 10, 0, 0, -1, 0, 0));
+    }
+
     [Theory]
     [InlineData(0UL)]
     [InlineData(1UL)]

@@ -42,8 +42,10 @@ public class SimulationTests
     public void RepeatedTicksRemainDeterministicAndConsumeNoRandomValues()
     {
         // Preserve this Task 4 movement/RNG regression independently of survival.
-        var first = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0, 2, 0, 150, 50, 50, 0));
-        var second = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0, 2, 0, 150, 50, 50, 0));
+        var settings = new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0, 2, 0, 150, 50, 50, 0,
+            0, 0, 0, 200, 0, 5, 1, 0.05, 0, 0, 0, 0, 0, 100, 0, 5, 0, 0);
+        var first = new Simulation(settings);
+        var second = new Simulation(settings);
         var initialRandom = first.RandomState;
         var initial = first.State;
         for (var tick = 1; tick <= 100; tick++)

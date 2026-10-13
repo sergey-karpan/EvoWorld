@@ -60,8 +60,8 @@ public class SurvivalTests
             first.AdvanceTick(); second.AdvanceTick();
             Assert.Equal(tick, first.TickCount);
             Assert.Equal(first.TickCount, second.TickCount);
-            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray(),
-                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray());
+            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism, o.SensingRadius, o.SteeringRate)).ToArray(),
+                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism, o.SensingRadius, o.SteeringRate)).ToArray());
             Assert.Equal(first.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray(),
                 second.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray());
             if (first.NextFoodId != nextFoodId)
@@ -73,7 +73,7 @@ public class SurvivalTests
             }
             while (nextOrganismId < first.NextOrganismId)
             {
-                expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); nextOrganismId++;
+                expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); nextOrganismId++;
             }
             Assert.Equal(nextOrganismId, second.NextOrganismId);
             Assert.Equal(expectedRandom.CaptureState(), first.RandomState);

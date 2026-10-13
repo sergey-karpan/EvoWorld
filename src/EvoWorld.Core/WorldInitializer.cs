@@ -30,7 +30,8 @@ public static class WorldInitializer
             var y = NextScaled(random, settings.WorldHeight);
             var heading = NextScaled(random, 2.0 * Math.PI);
             organisms[id] = new Organism(id, x, y, heading, InitialOrganismEnergy,
-                settings.OrganismSpeed, settings.OrganismEnergyDrainPerSecond);
+                settings.OrganismSpeed, settings.OrganismEnergyDrainPerSecond,
+                settings.OrganismSensingRadius, settings.OrganismSteeringRate);
         }
 
         for (var id = 0; id < foodItems.Length; id++)
@@ -50,7 +51,20 @@ public static class WorldInitializer
                 var metabolism = TraitVariation.Apply(organism.Metabolism, settings.InitialMetabolismVariationAmplitude,
                     settings.MinMetabolism, settings.MaxMetabolism, random.NextUInt());
                 organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
-                    organism.Energy, speed, metabolism);
+                    organism.Energy, speed, metabolism, organism.SensingRadius, organism.SteeringRate);
+            }
+        }
+        if (settings.InitialSensingRadiusVariationAmplitude != 0 || settings.InitialSteeringRateVariationAmplitude != 0)
+        {
+            for (var id = 0; id < organisms.Length; id++)
+            {
+                var organism = organisms[id];
+                var sensing = TraitVariation.Apply(organism.SensingRadius, settings.InitialSensingRadiusVariationAmplitude,
+                    settings.MinSensingRadius, settings.MaxSensingRadius, random.NextUInt());
+                var steering = TraitVariation.Apply(organism.SteeringRate, settings.InitialSteeringRateVariationAmplitude,
+                    settings.MinSteeringRate, settings.MaxSteeringRate, random.NextUInt());
+                organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
+                    organism.Energy, organism.Speed, organism.Metabolism, sensing, steering);
             }
         }
         return new WorldState(settings.WorldWidth, settings.WorldHeight, organisms, foodItems);

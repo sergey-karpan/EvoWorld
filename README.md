@@ -175,7 +175,7 @@ double bits calculated independently in Python from Task 2 golden outputs.
 `new Simulation(settings)` owns one persistent PCG32 stream. Initialization uses
 the seeded generator and retains its stream state. `AdvanceTick()` advances
 exactly one configured timestep. Movement and survival consume zero random outputs;
-regeneration consumes two per successful spawn and reproduction four per birth. The engine is
+regeneration consumes two per successful spawn and reproduction six per birth. The engine is
 single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
 with `World` and `TickCount`; previous world and simulation snapshots remain valid.
 
@@ -216,7 +216,7 @@ Each tick processes organisms in ascending stable ID order:
 
 1. Subtract individual Metabolism times configured timestep, even when stationary.
 2. Remove organisms with energy at or below zero; they neither move nor feed.
-3. Move surviving organisms from their previous positions and reflect boundaries.
+3. Sense available food, steer, move survivors from previous positions, and reflect boundaries.
 4. At the resulting position, claim at most one currently available food item
    within the inclusive pickup radius: nearest distance, then smallest food ID
    when computed distances are exactly equal.
@@ -313,7 +313,7 @@ deaths open slots and lower parent IDs get first opportunity. A skipped birth
 deducts no cost, allocates no ID, and consumes no random values. Default births
 conserve energy; a smaller offspring energy loses the difference as overhead.
 
-Each successful birth uses four outputs from the same tentative PCG32 stream,
+Each successful birth uses six outputs from the same tentative PCG32 stream,
 after any food-regeneration draws. First, output / 2^32 is multiplied by 2*pi;
 cosine and sine of this angle are each multiplied by fixed radius 5 and added
 to the parent's post-movement coordinates. Negative candidates clamp to zero;
@@ -325,6 +325,7 @@ The parent heading is unchanged. Calculations follow this order using .NET math;
 cross-runtime bitwise equivalence is not promised.
 Third and fourth outputs determine Speed and Metabolism mutation, respectively.
 They are consumed even when mutation amplitudes are zero.
+Fifth and sixth outputs determine SensingRadius and SteeringRate mutation.
 
 The child receives exactly configured offspring energy and a monotonic ID.
 Its long allocation counter starts at the initial population; custom internal
@@ -374,7 +375,7 @@ non-finite required movement or metabolic products fail the complete transaction
 
 Children inherit the specific parent's values, then mutate only at birth.
 Food draws precede births; every birth draws position, heading, speed mutation,
-then metabolism mutation. One food and two children therefore consume ten
+metabolism mutation, sensing mutation, then steering mutation. One food and two children consume fourteen
 outputs. Later reproduction histories differ from Task 7 because of these extra
 draws, while the PCG algorithm and homogeneous initial-world fixtures are unchanged.
 All traits, RNG, and ID counters publish together; failed ticks leak no mutations
@@ -382,9 +383,72 @@ or random draws, and retries start from the same committed state.
 
 Heritable variation may affect survival and reproductive success, allowing
 selection to emerge. Adaptation, improvement, and population survival are not
-guaranteed. No generic genome or additional traits exist. Food sensing/seeking,
-neural networks, memory, learning, sexual reproduction, crossover, speciation,
+guaranteed. No generic genome exists. Neural networks, memory, learning,
+sexual reproduction, crossover, speciation,
 trait visualization, and persistence remain deferred.
+
+## Reactive Sensing and Food Seeking
+
+Organisms now also carry immutable, finite, nonnegative SensingRadius (world
+units) and SteeringRate (radians per simulated second). Legacy entity constructors
+default both to zero. Production initialization explicitly uses configured
+baselines, defaulting to radius 30 and rate 2. The new 33-argument settings
+constructor appends ten values in this order:
+
+| Setting | Default |
+|---|---:|
+| OrganismSensingRadius | 30 |
+| OrganismSteeringRate | 2 |
+| InitialSensingRadiusVariationAmplitude | 0 |
+| InitialSteeringRateVariationAmplitude | 0 |
+| MinSensingRadius | 0 |
+| MaxSensingRadius | 100 |
+| MinSteeringRate | 0 |
+| MaxSteeringRate | 5 |
+| SensingRadiusMutationAmplitude | 2 |
+| SteeringRateMutationAmplitude | 0.1 |
+
+All values must be finite and nonnegative, minima below maxima, and explicit
+baselines within bounds. Older constructors retain their signatures and defaults.
+Mutation reuses Task 8's bounded uniform variation and clamping rules; adults
+preserve all four traits. Newborns do not sense or steer until the following tick.
+
+Initialization always completes original placement first. The optional Task 8
+speed/metabolism phase follows, then a separate optional Task 9 sensing/steering
+phase. Each enabled group consumes two outputs per organism, even if only one
+amplitude is nonzero. With N organisms and F food items, the four modes consume
+3N+2F, 5N+2F (old only), 5N+2F (new only), or 7N+2F (both). Old-only Task 8 values
+and stream states remain unchanged; no traits are interleaved with placement.
+
+After metabolic drain, each survivor searches food not consumed by earlier IDs,
+using its starting position. FoodDistance selects the nearest within the inclusive
+sensing radius, with smallest-ID ties. Radius zero disables sensing entirely,
+including coincidence. Positive-radius coincident food is a valid nearest target
+but preserves heading; pickup still happens only after movement. Regenerated
+food is unavailable until the next tick.
+
+For a noncoincident target, normalize Atan2(dy,dx), then use the shortest signed
+difference in (-pi,pi], choosing positive rotation for an exact half-turn.
+Limit rotation to SteeringRate*timestep without overshooting. Because no shortest
+turn exceeds pi, larger products safely saturate at pi; overflowing steering
+products are not errors. Movement/metabolic product overflow policies remain
+unchanged. No target, zero rate, or zero rotation preserves the exact heading.
+Steering precedes movement, and reflection determines the final heading without
+a second steering pass. Stationary organisms may turn. Sensing and steering
+consume no RNG and add no separate energy cost.
+
+Availability is resolved sequentially, but other organisms' updated positions
+never influence steering. All changes, draws, and ID allocations remain tentative
+until the existing single-reference commit; failures and retries preserve the
+complete prior transaction. Six outputs per successful birth extend Task 8's
+first four draws; later reproduction histories shift intentionally. Skipped
+births consume zero, and food regeneration still consumes two per successful spawn.
+
+Food seeking is reactive: there is no stored target, memory, route planning, or
+learning. Selection may affect sensory traits over generations, without guaranteed
+adaptation. Multiple sensors, predator/prey behavior, obstacle avoidance, flocking,
+pathfinding, learning, sexual reproduction, visualization additions, and persistence
+remain deferred.
 
 ## Development Status
 
@@ -399,7 +463,8 @@ Task 5 adds baseline metabolism, food consumption, energy recovery, and death.
 Task 6 adds deterministic food regeneration with transactional RNG and ID history.
 Task 7 adds asexual reproduction, energy transfer, and bounded heading variation.
 Task 8 adds individual Speed and Metabolism with inheritance and bounded mutation.
-Sensing and food-seeking, additional traits, persistence, and interactive
+Task 9 adds individual sensing and steering with reactive food seeking.
+Additional traits, persistence, and interactive
 configuration remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,

@@ -22,6 +22,7 @@ public sealed class Simulation
     internal bool FailWorldConstructionForTesting { get; set; }
     internal bool FailBeforeMutationForTesting { get; set; }
     internal bool FailOffspringTraitConstructionForTesting { get; set; }
+    internal int? FailSteeringForOrganismIdForTesting { get; set; }
 
     public Simulation(SimulationSettings settings)
     {
@@ -77,34 +78,22 @@ public sealed class Simulation
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
+            var heading = FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds);
+            if (FailSteeringForOrganismIdForTesting == organism.Id)
+                throw new InvalidOperationException("Injected steering failure.");
             var distance = organism.Speed * Settings.TickDurationSeconds;
             if (!double.IsFinite(distance))
                 throw new OverflowException("Movement distance must be finite.");
-            var (cosine, sine) = Direction(organism.HeadingRadians);
+            var (cosine, sine) = Direction(heading);
             var x = BoundaryReflection.Reflect(organism.X, cosine * distance, Settings.WorldWidth);
             var y = BoundaryReflection.Reflect(organism.Y, sine * distance, Settings.WorldHeight);
-            var heading = organism.HeadingRadians;
             if (x.Reflected && y.Reflected)
                 heading = Normalize(heading + Math.PI);
             else if (x.Reflected)
                 heading = Normalize(Math.PI - heading);
             else if (y.Reflected)
                 heading = Normalize(-heading);
-            var selected = -1;
-            var closest = default(FoodDistance);
-            for (var foodIndex = 0; foodIndex < foodItems.Count; foodIndex++)
-            {
-                if (consumed[foodIndex]) continue;
-                var food = foodItems[foodIndex];
-                var separation = FoodDistance.Between(x.Position, y.Position, food.X, food.Y);
-                if (separation.CompareTo(radius) > 0) continue;
-                if (selected < 0 || separation.CompareTo(closest) < 0
-                    || (separation.CompareTo(closest) == 0 && food.Id < foodItems[selected].Id))
-                {
-                    selected = foodIndex;
-                    closest = separation;
-                }
-            }
+            var selected = FoodSeeking.FindNearest(x.Position, y.Position, foodItems, consumed, radius);
             if (selected >= 0)
             {
                 energy += foodItems[selected].Energy;
@@ -112,7 +101,8 @@ public sealed class Simulation
                     throw new OverflowException("Organism energy after feeding must be finite.");
                 consumed[selected] = true;
             }
-            survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy, organism.Speed, organism.Metabolism));
+            survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy,
+                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate));
         }
 
         var remainingFood = new List<Food>(foodItems.Count);
@@ -159,9 +149,14 @@ public sealed class Simulation
                 Settings.MinSpeed, Settings.MaxSpeed, random.NextUInt());
             var childMetabolism = TraitVariation.Apply(parent.Metabolism, Settings.MetabolismMutationAmplitude,
                 Settings.MinMetabolism, Settings.MaxMetabolism, random.NextUInt());
+            var childSensingRadius = TraitVariation.Apply(parent.SensingRadius, Settings.SensingRadiusMutationAmplitude,
+                Settings.MinSensingRadius, Settings.MaxSensingRadius, random.NextUInt());
+            var childSteeringRate = TraitVariation.Apply(parent.SteeringRate, Settings.SteeringRateMutationAmplitude,
+                Settings.MinSteeringRate, Settings.MaxSteeringRate, random.NextUInt());
             offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
-                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism));
-            survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy, parent.Speed, parent.Metabolism);
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate));
+            survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
+                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate);
             nextOrganismId++;
         }
         survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.
@@ -183,13 +178,7 @@ public sealed class Simulation
         return (Math.Cos(heading), Math.Sin(heading));
     }
 
-    private static double Normalize(double heading)
-    {
-        var fullTurn = 2.0 * Math.PI;
-        var result = heading % fullTurn;
-        if (result < 0.0) result += fullTurn;
-        return result < fullTurn ? result : Math.BitDecrement(fullTurn);
-    }
+    private static double Normalize(double heading) => FoodSeeking.Normalize(heading);
 
     private static double ClampOffspringPosition(double position, double offset, double dimension)
     {
@@ -214,7 +203,9 @@ public sealed class Simulation
                 || !double.IsFinite(entity.HeadingRadians) || entity.HeadingRadians < 0.0
                 || entity.HeadingRadians >= 2.0 * Math.PI || !double.IsFinite(entity.Energy) || entity.Energy <= 0.0
                 || !double.IsFinite(entity.Speed) || entity.Speed < 0
-                || !double.IsFinite(entity.Metabolism) || entity.Metabolism < 0)
+                || !double.IsFinite(entity.Metabolism) || entity.Metabolism < 0
+                || !double.IsFinite(entity.SensingRadius) || entity.SensingRadius < 0
+                || !double.IsFinite(entity.SteeringRate) || entity.SteeringRate < 0)
                 throw new ArgumentException("Starting organisms must satisfy world invariants.", nameof(world));
         }
         for (var i = 0; i < world.FoodItems.Count; i++)

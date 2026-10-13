@@ -240,13 +240,13 @@ public class FoodRegenerationTests
             Assert.Equal(tick, first.TickCount);
             Assert.Equal(first.TickCount, second.TickCount);
             Assert.Equal(first.NextFoodId, second.NextFoodId);
-            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray(),
-                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray());
+            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism, o.SensingRadius, o.SteeringRate)).ToArray(),
+                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism, o.SensingRadius, o.SteeringRate)).ToArray());
             Assert.Equal(first.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray(),
                 second.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray());
             while (previousOrganismId < first.NextOrganismId)
             {
-                expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); previousOrganismId++;
+                expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); previousOrganismId++;
             }
             Assert.Equal(previousOrganismId, second.NextOrganismId);
             Assert.InRange(first.State.World.Organisms.Count, 0, 500);

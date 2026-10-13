@@ -29,6 +29,16 @@ public sealed class SimulationSettings
     public double MaxMetabolism { get; }
     public double SpeedMutationAmplitude { get; }
     public double MetabolismMutationAmplitude { get; }
+    public double OrganismSensingRadius { get; }
+    public double OrganismSteeringRate { get; }
+    public double InitialSensingRadiusVariationAmplitude { get; }
+    public double InitialSteeringRateVariationAmplitude { get; }
+    public double MinSensingRadius { get; }
+    public double MaxSensingRadius { get; }
+    public double MinSteeringRate { get; }
+    public double MaxSteeringRate { get; }
+    public double SensingRadiusMutationAmplitude { get; }
+    public double SteeringRateMutationAmplitude { get; }
 
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight)
         : this(seed, tickDurationSeconds, worldWidth, worldHeight, DefaultOrganismCount, DefaultFoodCount)
@@ -90,6 +100,28 @@ public sealed class SimulationSettings
         double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
         double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
         double speedMutationAmplitude, double metabolismMutationAmplitude)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight, initialOrganismCount, initialFoodCount,
+            organismSpeed, organismEnergyDrainPerSecond, foodPickupRadius, foodRegenerationIntervalSeconds,
+            maxFoodCount, reproductionEnergyThreshold, reproductionEnergyCost, offspringInitialEnergy,
+            maxOrganismCount, initialSpeedVariationAmplitude, initialMetabolismVariationAmplitude,
+            minSpeed, maxSpeed, minMetabolism, maxMetabolism, speedMutationAmplitude, metabolismMutationAmplitude,
+            30, 2, 0, 0, 0, 100, 0, 5, 2, 0.1)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
@@ -123,6 +155,22 @@ public sealed class SimulationSettings
             throw new ArgumentOutOfRangeException(nameof(organismEnergyDrainPerSecond));
         ValidateNonnegativeFinite(speedMutationAmplitude, nameof(speedMutationAmplitude));
         ValidateNonnegativeFinite(metabolismMutationAmplitude, nameof(metabolismMutationAmplitude));
+        ValidateNonnegativeFinite(organismSensingRadius, nameof(organismSensingRadius));
+        ValidateNonnegativeFinite(organismSteeringRate, nameof(organismSteeringRate));
+        ValidateNonnegativeFinite(initialSensingRadiusVariationAmplitude, nameof(initialSensingRadiusVariationAmplitude));
+        ValidateNonnegativeFinite(initialSteeringRateVariationAmplitude, nameof(initialSteeringRateVariationAmplitude));
+        ValidateNonnegativeFinite(minSensingRadius, nameof(minSensingRadius));
+        ValidateNonnegativeFinite(maxSensingRadius, nameof(maxSensingRadius));
+        ValidateNonnegativeFinite(minSteeringRate, nameof(minSteeringRate));
+        ValidateNonnegativeFinite(maxSteeringRate, nameof(maxSteeringRate));
+        if (minSensingRadius >= maxSensingRadius) throw new ArgumentOutOfRangeException(nameof(maxSensingRadius));
+        if (minSteeringRate >= maxSteeringRate) throw new ArgumentOutOfRangeException(nameof(maxSteeringRate));
+        if (organismSensingRadius < minSensingRadius || organismSensingRadius > maxSensingRadius)
+            throw new ArgumentOutOfRangeException(nameof(organismSensingRadius));
+        if (organismSteeringRate < minSteeringRate || organismSteeringRate > maxSteeringRate)
+            throw new ArgumentOutOfRangeException(nameof(organismSteeringRate));
+        ValidateNonnegativeFinite(sensingRadiusMutationAmplitude, nameof(sensingRadiusMutationAmplitude));
+        ValidateNonnegativeFinite(steeringRateMutationAmplitude, nameof(steeringRateMutationAmplitude));
 
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
@@ -144,6 +192,13 @@ public sealed class SimulationSettings
         MinSpeed = minSpeed; MaxSpeed = maxSpeed;
         MinMetabolism = minMetabolism; MaxMetabolism = maxMetabolism;
         SpeedMutationAmplitude = speedMutationAmplitude; MetabolismMutationAmplitude = metabolismMutationAmplitude;
+        OrganismSensingRadius = organismSensingRadius; OrganismSteeringRate = organismSteeringRate;
+        InitialSensingRadiusVariationAmplitude = initialSensingRadiusVariationAmplitude;
+        InitialSteeringRateVariationAmplitude = initialSteeringRateVariationAmplitude;
+        MinSensingRadius = minSensingRadius; MaxSensingRadius = maxSensingRadius;
+        MinSteeringRate = minSteeringRate; MaxSteeringRate = maxSteeringRate;
+        SensingRadiusMutationAmplitude = sensingRadiusMutationAmplitude;
+        SteeringRateMutationAmplitude = steeringRateMutationAmplitude;
     }
 
     public static SimulationSettings CreateDefault() => new(42UL, 1.0 / 30.0, 1000.0, 700.0);

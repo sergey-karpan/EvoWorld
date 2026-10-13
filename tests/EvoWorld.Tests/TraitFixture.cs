@@ -10,7 +10,8 @@ internal static class TraitFixture
         double speedAmplitude = 1, double metabolismAmplitude = 0.05, int cap = 10, int foodCap = 0,
         double duration = 1, double radius = 0) =>
         new(42, duration, 100, 80, organisms, food, speed, metabolism, radius, 1, foodCap, 150, 50, 50, cap,
-            initialSpeedAmplitude, initialMetabolismAmplitude, minSpeed, maxSpeed, minMetabolism, maxMetabolism, speedAmplitude, metabolismAmplitude);
+            initialSpeedAmplitude, initialMetabolismAmplitude, minSpeed, maxSpeed, minMetabolism, maxMetabolism, speedAmplitude, metabolismAmplitude,
+            0, 0, 0, 0, 0, 100, 0, 5, 0, 0);
 
     internal static Simulation Create(Organism[] organisms, Food[]? food = null, SimulationSettings? settings = null)
     {

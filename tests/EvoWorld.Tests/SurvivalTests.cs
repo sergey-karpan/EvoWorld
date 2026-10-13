@@ -1,4 +1,5 @@
 using EvoWorld.Core;
+using EvoWorld.Core.Random;
 using Xunit;
 
 namespace EvoWorld.Tests;
@@ -48,7 +49,11 @@ public class SurvivalTests
     {
         var first = new Simulation(SimulationSettings.CreateDefault());
         var second = new Simulation(SimulationSettings.CreateDefault());
-        var random = first.RandomState;
+        // Defaults include regeneration. Track the established initialization
+        // output count and two draws for each newly allocated food ID.
+        var expectedRandom = new Pcg32(42);
+        for (var i = 0; i < 260; i++) expectedRandom.NextUInt();
+        var nextFoodId = first.NextFoodId;
         for (var tick = 1; tick <= 1000; tick++)
         {
             first.AdvanceTick(); second.AdvanceTick();
@@ -58,8 +63,15 @@ public class SurvivalTests
                 second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy)).ToArray());
             Assert.Equal(first.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray(),
                 second.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray());
-            Assert.Equal(random, first.RandomState);
-            Assert.Equal(random, second.RandomState);
+            if (first.NextFoodId != nextFoodId)
+            {
+                Assert.Equal(nextFoodId + 1, first.NextFoodId);
+                Assert.Equal(0, tick % 60);
+                expectedRandom.NextUInt(); expectedRandom.NextUInt();
+                nextFoodId = first.NextFoodId;
+            }
+            Assert.Equal(expectedRandom.CaptureState(), first.RandomState);
+            Assert.Equal(first.RandomState, second.RandomState);
         }
         Assert.True(first.State.World.FoodItems.Count < 100);
         Assert.All(first.State.World.Organisms, o => Assert.True(o.Energy > 0 && double.IsFinite(o.Energy)));

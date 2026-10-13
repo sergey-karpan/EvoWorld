@@ -15,6 +15,8 @@ public sealed class SimulationSettings
     public double OrganismSpeed { get; }
     public double OrganismEnergyDrainPerSecond { get; }
     public double FoodPickupRadius { get; }
+    public double FoodRegenerationIntervalSeconds { get; }
+    public int MaxFoodCount { get; }
 
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight)
         : this(seed, tickDurationSeconds, worldWidth, worldHeight, DefaultOrganismCount, DefaultFoodCount)
@@ -38,6 +40,15 @@ public sealed class SimulationSettings
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
         int initialOrganismCount, int initialFoodCount, double organismSpeed,
         double organismEnergyDrainPerSecond, double foodPickupRadius)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight, initialOrganismCount,
+            initialFoodCount, organismSpeed, organismEnergyDrainPerSecond, foodPickupRadius, 2.0, 200)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
@@ -50,6 +61,8 @@ public sealed class SimulationSettings
             throw new ArgumentOutOfRangeException(nameof(organismEnergyDrainPerSecond));
         if (!double.IsFinite(foodPickupRadius) || foodPickupRadius < 0.0)
             throw new ArgumentOutOfRangeException(nameof(foodPickupRadius));
+        ValidatePositiveFinite(foodRegenerationIntervalSeconds, nameof(foodRegenerationIntervalSeconds));
+        ArgumentOutOfRangeException.ThrowIfNegative(maxFoodCount);
 
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
@@ -60,6 +73,8 @@ public sealed class SimulationSettings
         OrganismSpeed = organismSpeed;
         OrganismEnergyDrainPerSecond = organismEnergyDrainPerSecond;
         FoodPickupRadius = foodPickupRadius;
+        FoodRegenerationIntervalSeconds = foodRegenerationIntervalSeconds;
+        MaxFoodCount = maxFoodCount;
     }
 
     public static SimulationSettings CreateDefault() => new(42UL, 1.0 / 30.0, 1000.0, 700.0);

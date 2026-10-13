@@ -5,7 +5,7 @@ namespace EvoWorld.Core;
 public static class WorldInitializer
 {
     private const double InitialOrganismEnergy = 100.0;
-    private const double InitialFoodEnergy = 20.0;
+    internal const double InitialFoodEnergy = 20.0;
 
     /// <summary>
     /// Creates organisms first, consuming X, Y, heading per ascending ID,
@@ -42,7 +42,7 @@ public static class WorldInitializer
         return new WorldState(settings.WorldWidth, settings.WorldHeight, organisms, foodItems);
     }
 
-    private static double NextScaled(Pcg32 random, double upperBound)
+    internal static double NextScaled(Pcg32 random, double upperBound)
     {
         var value = (random.NextUInt() / 4294967296.0) * upperBound;
         // Subnormal dimensions can round a product up to the exclusive bound.

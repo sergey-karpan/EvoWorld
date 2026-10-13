@@ -5,37 +5,51 @@ namespace EvoWorld.Core;
 /// <summary>A single-threaded fixed-step simulation. Not thread-safe.</summary>
 public sealed class Simulation
 {
-    private readonly Pcg32 _random;
-    private SimulationState _state;
+    private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId);
+    private Advancement _advancement;
+    private readonly long _regenerationTicks;
 
     public SimulationSettings Settings { get; }
-    public SimulationState State => _state;
-    public long TickCount => _state.TickCount;
-    internal Pcg32State RandomState => _random.CaptureState();
+    public SimulationState State => _advancement.State;
+    public long TickCount => State.TickCount;
+    internal Pcg32State RandomState => _advancement.Random;
+    internal long NextFoodId => _advancement.NextFoodId;
+    // Narrow test seam: force the real WorldState constructor to reject its input
+    // after tentative spawn draws, without exposing any public mutation facility.
+    internal bool FailWorldConstructionForTesting { get; set; }
 
     public Simulation(SimulationSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         Settings = settings;
-        _random = new Pcg32(settings.Seed);
-        _state = new SimulationState(WorldInitializer.Create(settings, _random), 0);
+        _regenerationTicks = FoodRegenerationSchedule.Calculate(settings.FoodRegenerationIntervalSeconds, settings.TickDurationSeconds);
+        var random = new Pcg32(settings.Seed);
+        var state = new SimulationState(WorldInitializer.Create(settings, random), 0);
+        _advancement = new(state, random.CaptureState(), settings.InitialFoodCount);
     }
 
     // Test-only starting snapshot seam: immutable input, validated invariants,
     // and the same post-initialization RNG as the public constructor. Counts may
-    // shrink and IDs may have gaps after removal; no new entities are allowed.
-    internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0)
+    // shrink or include regenerated food; IDs may have gaps. Explicit history is
+    // optional for testing previously allocated IDs no longer present in the world.
+    internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0, long? nextFoodId = null)
         : this(settings)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentOutOfRangeException.ThrowIfNegative(tickCount);
         ValidateStartingWorld(settings, world);
-        _state = new SimulationState(world, tickCount);
+        var minimumId = Math.Max((long)settings.InitialFoodCount,
+            world.FoodItems.Count == 0 ? 0 : (long)world.FoodItems[^1].Id + 1);
+        var nextId = nextFoodId ?? minimumId;
+        if (nextId < minimumId || nextId > int.MaxValue + 1L)
+            throw new ArgumentOutOfRangeException(nameof(nextFoodId));
+        _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId);
     }
 
     public void AdvanceTick()
     {
-        var previous = _state;
+        var previousAdvancement = _advancement;
+        var previous = previousAdvancement.State;
         var nextTick = checked(previous.TickCount + 1);
         var energyCost = Settings.OrganismEnergyDrainPerSecond * Settings.TickDurationSeconds;
         if (!double.IsFinite(energyCost))
@@ -94,9 +108,26 @@ public sealed class Simulation
         var remainingFood = new List<Food>(foodItems.Count);
         for (var index = 0; index < foodItems.Count; index++)
             if (!consumed[index]) remainingFood.Add(foodItems[index]);
-        var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight, survivors, remainingFood);
+        var nextRandom = previousAdvancement.Random;
+        var nextId = previousAdvancement.NextFoodId;
+        if (_regenerationTicks != 0 && nextTick % _regenerationTicks == 0
+            && remainingFood.Count < Settings.MaxFoodCount)
+        {
+            var id = checked((int)nextId);
+            var random = new Pcg32(nextRandom);
+            var x = WorldInitializer.NextScaled(random, Settings.WorldWidth);
+            var y = WorldInitializer.NextScaled(random, Settings.WorldHeight);
+            if (!ValidPosition(x, y, previous.World))
+                throw new OverflowException("Regenerated food must lie within the world.");
+            remainingFood.Add(new Food(id, x, y, WorldInitializer.InitialFoodEnergy));
+            nextRandom = random.CaptureState();
+            nextId++;
+        }
+        var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight,
+            FailWorldConstructionForTesting ? null! : survivors, remainingFood);
         var next = new SimulationState(world, nextTick);
-        _state = next; // Sole commit; movement and survival never use _random.
+        var advancement = new Advancement(next, nextRandom, nextId);
+        _advancement = advancement; // Sole commit: state, stream position, and ID history.
     }
 
     private static (double Cosine, double Sine) Direction(double heading)
@@ -120,8 +151,9 @@ public sealed class Simulation
     private static void ValidateStartingWorld(SimulationSettings settings, WorldState world)
     {
         if (world.WorldWidth != settings.WorldWidth || world.WorldHeight != settings.WorldHeight
-            || world.Organisms.Count > settings.InitialOrganismCount || world.FoodItems.Count > settings.InitialFoodCount)
-            throw new ArgumentException("Starting world must match dimensions and not exceed initial counts.", nameof(world));
+            || world.Organisms.Count > settings.InitialOrganismCount
+            || world.FoodItems.Count > Math.Max(settings.InitialFoodCount, settings.MaxFoodCount))
+            throw new ArgumentException("Starting world must match dimensions and supported population limits.", nameof(world));
         for (var i = 0; i < world.Organisms.Count; i++)
         {
             var entity = world.Organisms[i];

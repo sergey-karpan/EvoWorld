@@ -31,7 +31,7 @@ public class SimulationTests
     [InlineData(3, 0)]
     public void EmptyCategoriesAdvanceNormally(int organisms, int food)
     {
-        var simulation = new Simulation(new SimulationSettings(0UL, 0.125, 100, 80, organisms, food));
+        var simulation = new Simulation(new SimulationSettings(0UL, 0.125, 100, 80, organisms, food, 50, 1, 8, 2, 0));
         simulation.AdvanceTick();
         Assert.Equal(1, simulation.TickCount);
         Assert.Equal(organisms, simulation.State.World.Organisms.Count);
@@ -42,8 +42,8 @@ public class SimulationTests
     public void RepeatedTicksRemainDeterministicAndConsumeNoRandomValues()
     {
         // Preserve this Task 4 movement/RNG regression independently of survival.
-        var first = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0));
-        var second = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0));
+        var first = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0, 2, 0));
+        var second = new Simulation(new SimulationSettings(42UL, 0.125, 10, 8, 10, 5, 50, 0, 0, 2, 0));
         var initialRandom = first.RandomState;
         var initial = first.State;
         for (var tick = 1; tick <= 100; tick++)
@@ -93,7 +93,7 @@ public class SimulationTests
     [Fact]
     public void DistanceOverflowLeavesWholeSimulationUnchanged()
     {
-        var settings = new SimulationSettings(42UL, 2, 10, 10, 2, 1, double.MaxValue);
+        var settings = new SimulationSettings(42UL, 2, 10, 10, 2, 1, double.MaxValue, 1, 8, 2, 0);
         var simulation = new Simulation(settings);
         AssertRollback(simulation);
     }
@@ -101,7 +101,7 @@ public class SimulationTests
     [Fact]
     public void CandidateOverflowAfterValidOrganismDoesNotPartiallyCommit()
     {
-        var settings = new SimulationSettings(42UL, 1, double.MaxValue, double.MaxValue, 2, 0, double.MaxValue);
+        var settings = new SimulationSettings(42UL, 1, double.MaxValue, double.MaxValue, 2, 0, double.MaxValue, 1, 8, 2, 0);
         var world = new WorldState(double.MaxValue, double.MaxValue,
             [new Organism(0, 0, 0, Math.PI, 100), new Organism(1, double.MaxValue / 2, 0, 0, 100)], []);
         // First organism is representable; the second candidate overflows.
@@ -111,7 +111,7 @@ public class SimulationTests
     [Fact]
     public void UnsupportedReflectionAfterValidOrganismDoesNotPartiallyCommit()
     {
-        var settings = new SimulationSettings(42UL, 1, 10, double.Epsilon, 2, 0, 1);
+        var settings = new SimulationSettings(42UL, 1, 10, double.Epsilon, 2, 0, 1, 1, 8, 2, 0);
         var world = new WorldState(10, double.Epsilon,
             [new Organism(0, 1, 0, 0, 100), new Organism(1, 1, 0, Math.PI / 2, 100)], []);
         AssertRollback(new Simulation(settings, world));

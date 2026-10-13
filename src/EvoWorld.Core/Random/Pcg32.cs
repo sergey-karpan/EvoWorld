@@ -32,6 +32,9 @@ public sealed class Pcg32
         }
     }
 
+    // Temporary transaction copy of the same stream, without seeding or draws.
+    internal Pcg32(Pcg32State state) => RestoreState(state);
+
     public Pcg32State CaptureState() => new(_state, _increment);
 
     public void RestoreState(Pcg32State state)

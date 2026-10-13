@@ -6,6 +6,51 @@ namespace EvoWorld.Tests;
 public class SimulationSettingsTests
 {
     [Fact]
+    public void ExistingConstructorsShareRegenerationDefaults()
+    {
+        SimulationSettings[] values = [new(42, 1, 10, 10), new(42, 1, 10, 10, 0, 0),
+            new(42, 1, 10, 10, 0, 0, 0), new(42, 1, 10, 10, 0, 0, 0, 0, 0), SimulationSettings.CreateDefault()];
+        foreach (var value in values)
+        {
+            Assert.Equal(2.0, value.FoodRegenerationIntervalSeconds);
+            Assert.Equal(200, value.MaxFoodCount);
+        }
+    }
+
+    [Theory]
+    [InlineData(double.Epsilon, 0)]
+    [InlineData(0.25, 12)]
+    [InlineData(double.MaxValue, int.MaxValue)]
+    public void ExplicitRegenerationSettingsPreserveExtremesAndAllowInitialFoodAboveCeiling(double interval, int cap)
+    {
+        var settings = new SimulationSettings(42, 1, 10, 10, 0, 100, 0, 0, 0, interval, cap);
+        Assert.Equal(interval, settings.FoodRegenerationIntervalSeconds);
+        Assert.Equal(cap, settings.MaxFoodCount);
+        Assert.Equal(100, settings.InitialFoodCount);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void InvalidRegenerationIntervalIdentifiesParameter(double interval)
+    {
+        Assert.Equal("foodRegenerationIntervalSeconds", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, interval, 0)).ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void NegativeFoodCeilingIdentifiesParameter(int cap)
+    {
+        Assert.Equal("maxFoodCount", Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, cap)).ParamName);
+    }
+
+    [Fact]
     public void AllCompatibleConstructorsUseSurvivalDefaults()
     {
         SimulationSettings[] settings = [new(42, 1, 10, 10), new(42, 1, 10, 10, 0, 0),

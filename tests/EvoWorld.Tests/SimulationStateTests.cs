@@ -32,7 +32,7 @@ public class SimulationStateTests
     [Fact]
     public void TickOverflowLeavesStateAndRandomUnchanged()
     {
-        var settings = new SimulationSettings(42UL, 1, 10, 10, 1, 1, 0);
+        var settings = new SimulationSettings(42UL, 1, 10, 10, 1, 1, 0, 1, 8, 2, 0);
         var simulation = new Simulation(settings, WorldInitializer.Create(settings), long.MaxValue);
         var before = simulation.State;
         var random = simulation.RandomState;

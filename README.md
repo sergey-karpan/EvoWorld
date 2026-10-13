@@ -172,9 +172,10 @@ double bits calculated independently in Python from Task 2 golden outputs.
 
 ## Fixed-Step Movement
 
-`new Simulation(settings)` owns one persistent PCG32, passes it through world
-initialization, and retains its post-initialization state. `AdvanceTick()` advances
-exactly one configured timestep and consumes zero random outputs. The engine is
+`new Simulation(settings)` owns one persistent PCG32 stream. Initialization uses
+the seeded generator and retains its stream state. `AdvanceTick()` advances
+exactly one configured timestep. Movement and survival consume zero random outputs;
+regeneration consumes two per successful spawn. The engine is
 single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
 with `World` and `TickCount`; previous world and simulation snapshots remain valid.
 
@@ -220,7 +221,7 @@ Each tick processes organisms in ascending stable ID order:
    within the inclusive pickup radius: nearest distance, then smallest food ID
    when computed distances are exactly equal.
 5. Add that food's energy without an energy cap and create a replacement organism.
-6. Build surviving-organism and unconsumed-food collections, then publish one
+6. Build surviving-organism and unconsumed-food collections, regenerate food, then publish one
    complete immutable snapshot with the incremented tick count.
 
 An exhausted organism cannot be rescued by food that tick. Earlier organism IDs
@@ -229,7 +230,8 @@ food. Movement never depends on positions updated earlier in the tick. Food stay
 stationary until consumed. Unconsumed food objects are reused. IDs remain stable,
 may have gaps, and are never renumbered. An extinct world continues ticking.
 The internal test constructor accepts shrinking counts and strictly ascending,
-unique, nonnegative IDs, while rejecting counts above configured initial counts.
+unique, nonnegative IDs. Organisms cannot exceed the initial count; food cannot
+exceed the greater of initial food count and regeneration ceiling.
 
 Energy cost, subtraction, and gain must remain finite; invalid arithmetic throws
 `OverflowException` before publication. A failure after earlier deaths or food
@@ -247,6 +249,52 @@ without epsilon tolerances; this is not arbitrary-precision geometry or a promis
 of bitwise portability across runtimes. Any non-finite normalized distance fails
 atomically. Task 4's documented reflection limitations still apply.
 
+## Renewable Food Supply
+
+`FoodRegenerationIntervalSeconds` defaults to 2 simulated seconds and
+`MaxFoodCount` to 200. All earlier settings constructors retain these defaults;
+the eleven-argument overload appends explicit values. Intervals must be positive
+and finite; the ceiling is nonnegative. Zero ceiling disables regeneration while
+preserving initial food. Initial food may exceed the ceiling without being deleted.
+
+The interval is converted once to a whole-tick period, rounding the exact ratio
+of the supplied binary64 values to nearest with halfway values upward, with a
+minimum of one tick. The default period is 60: events occur at ticks 60, 120,
+180, etc., never tick zero. A shorter interval still creates at most one food per
+tick. Nonintegral requests are approximated by the resulting whole-tick cadence.
+For example, supplied 0.26 / 0.1 rounds to 3 ticks. Supplied 0.25 / 0.1 is slightly
+below 2.5 mathematically and rounds to 2, unlike rounded floating-point division.
+A focused UInt128 calculation avoids quotient overflow and unsafe long casts.
+Periods beyond the positive long tick range have no events during the simulation.
+
+After all Task 5 consumption, a due event adds exactly one food if the remaining
+count is below the ceiling. Skipped events consume no RNG, allocate no IDs, and
+are never recovered. Newly created food cannot be eaten until the next tick.
+Regeneration continues in empty or extinct worlds, subject to the same ceiling.
+
+Spawn coordinates reuse Task 3's exact mapping and upper-bound correction: two
+PCG32 outputs, X then Y, each divided by 2^32 and multiplied by its dimension.
+Food energy remains 20. Overlaps are allowed and require no retry draws.
+Initialization and PCG32 golden sequences remain unchanged.
+
+A long next-food-ID counter starts at the initial food count and never reuses IDs.
+The internal test-world constructor accounts for both initial allocation and the
+highest existing ID, and optionally accepts explicit removed-ID history.
+The final allocatable ID is int.MaxValue; further permitted spawns throw
+OverflowException. Cap-blocked events do not attempt allocation, even when IDs
+are exhausted. Tick-count overflow also fails without committing changes.
+
+Each permitted spawn uses a temporary copy of the exact current PCG32 state,
+without seeding or initial draws. The world snapshot, stream state, and next ID
+are held in one private immutable advancement record. All construction finishes
+before replacing that single reference. Failures after tentative draws or feeding
+leave every committed component unchanged, and retries start from the same stream.
+The application remains single-threaded; no locks or background scheduling exist.
+
+Food regeneration supplies a renewable resource but does not guarantee a living
+population: organisms still have no food-seeking behavior or reproduction.
+Existing movement/reflection and binary64 distance limitations still apply.
+
 ## Development Status
 
 Task 1 established the solution structure, WPF application shell, dependency
@@ -257,8 +305,9 @@ food, world snapshots, population configuration, and deterministic initializatio
 Task 4 adds constant-speed fixed-step movement, reflection, and immutable
 simulation snapshots. Task 4.5 adds world rendering and basic playback controls.
 Task 5 adds baseline metabolism, food consumption, energy recovery, and death.
-Food regeneration, reproduction, genetic inheritance, mutation, steering and
-food-seeking, advanced metabolism, and evolution remain deferred.
+Task 6 adds deterministic food regeneration with transactional RNG and ID history.
+Reproduction, genetic inheritance, mutation, steering and food-seeking, advanced
+metabolism, evolution, persistence, and interactive configuration remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

@@ -142,6 +142,15 @@ correlations, lineage and generational statistics, neural networks, predators an
 visualization beyond simple coloring remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
+## Neural Network Infrastructure
+
+Task 11a adds `NeuralGenome`, an immutable fixed 6 → 8 → 2 tanh network with
+74 defensively copied weights and biases in [-8,8]. `Weights` exposes a read-only
+span, `CreateZero()` creates zero parameters, and `Forward(inputs, outputs)`
+deterministically evaluates six finite inputs in [-1,1] into two caller-provided
+output slots without per-call heap allocation. It is not yet integrated into
+the simulation; input/output mapping and integration are planned for Task 11b.
+
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, fixed-step movement, survival,
@@ -516,6 +525,10 @@ Task 8 adds individual Speed and Metabolism with inheritance and bounded mutatio
 Task 9 adds individual sensing and steering with reactive food seeking.
 Task 10 adds population statistics, derived birth/death counters since each
 simulation's starting snapshot, and Desktop trait coloring and statistics display.
+Task 11a adds the immutable 6→8→2 NeuralGenome infrastructure with validated weights, 
+deterministic forward evaluation, and comprehensive numerical tests. Neural behavior 
+integration remains planned for Task 11b.
+
 Additional traits, persistence, and interactive
 configuration remain deferred.
 

@@ -6,6 +6,62 @@ namespace EvoWorld.Tests;
 public class SimulationSettingsTests
 {
     [Fact]
+    public void AllEarlierConstructorsShareReproductionDefaults()
+    {
+        SimulationSettings[] values = [new(42, 1, 10, 10), new(42, 1, 10, 10, 0, 0),
+            new(42, 1, 10, 10, 0, 0, 0), new(42, 1, 10, 10, 0, 0, 0, 0, 0),
+            new(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0), SimulationSettings.CreateDefault()];
+        foreach (var value in values)
+        {
+            Assert.Equal(150, value.ReproductionEnergyThreshold); Assert.Equal(50, value.ReproductionEnergyCost);
+            Assert.Equal(50, value.OffspringInitialEnergy); Assert.Equal(500, value.MaxOrganismCount);
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void InvalidReproductionValuesIdentifyCorrectParameters(double value)
+    {
+        Assert.Equal("reproductionEnergyThreshold", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0, value, 50, 50, 0)).ParamName);
+        Assert.Equal("reproductionEnergyCost", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0, 150, value, 50, 0)).ParamName);
+        Assert.Equal("offspringInitialEnergy", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0, 150, 50, value, 0)).ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void NegativePopulationCeilingIdentifiesParameter(int cap)
+    {
+        Assert.Equal("maxOrganismCount", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0, 150, 50, 50, cap)).ParamName);
+    }
+
+    [Fact]
+    public void OffspringEnergyCannotExceedCost()
+    {
+        Assert.Equal("offspringInitialEnergy", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new SimulationSettings(42, 1, 10, 10, 0, 0, 0, 0, 0, 1, 0, 150, 50, Math.BitIncrement(50.0), 0)).ParamName);
+    }
+
+    [Theory]
+    [InlineData(double.Epsilon)]
+    [InlineData(double.MaxValue)]
+    public void PositiveReproductionExtremesAndInitialPopulationAboveCeilingAreValid(double value)
+    {
+        var settings = new SimulationSettings(42, 1, 10, 10, 20, 100, 50, 1, 8, 2, 200, value, value, value, 0);
+        Assert.Equal(value, settings.ReproductionEnergyThreshold); Assert.Equal(value, settings.ReproductionEnergyCost);
+        Assert.Equal(value, settings.OffspringInitialEnergy); Assert.Equal(0, settings.MaxOrganismCount);
+        Assert.Equal(20, new Simulation(settings).State.World.Organisms.Count);
+    }
+
+    [Fact]
     public void ExistingConstructorsShareRegenerationDefaults()
     {
         SimulationSettings[] values = [new(42, 1, 10, 10), new(42, 1, 10, 10, 0, 0),

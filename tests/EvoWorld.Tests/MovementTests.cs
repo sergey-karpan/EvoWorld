@@ -178,7 +178,7 @@ public class MovementTests
         // An epsilon-sized world has only coordinate zero, so it contains no food.
         Food[] food = width == double.Epsilon && height == double.Epsilon
             ? [] : [new Food(0, width / 3, height / 3, 20)];
-        var settings = new SimulationSettings(42UL, duration, width, height, 1, food.Length, speed, 0, 0, 2, 0);
+        var settings = new SimulationSettings(42UL, duration, width, height, 1, food.Length, speed, 0, 0, 2, 0, 150, 50, 50, 0);
         var world = new WorldState(width, height,
             [new Organism(0, x, y, heading, 100)], food);
         return new Simulation(settings, world);

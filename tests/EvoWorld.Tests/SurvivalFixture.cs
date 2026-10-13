@@ -11,7 +11,7 @@ internal static class SurvivalFixture
     {
         food ??= [];
         var settings = new SimulationSettings(42, duration, width, height,
-            initialOrganisms ?? organisms.Length, initialFood ?? food.Length, speed, drain, radius, 2, 0);
+            initialOrganisms ?? organisms.Length, initialFood ?? food.Length, speed, drain, radius, 2, 0, 150, 50, 50, 0);
         return new Simulation(settings, new WorldState(width, height, organisms, food));
     }
 
@@ -20,6 +20,7 @@ internal static class SurvivalFixture
         var before = simulation.State;
         var random = simulation.RandomState;
         var nextFoodId = simulation.NextFoodId;
+        var nextOrganismId = simulation.NextOrganismId;
         Assert.Throws<OverflowException>(simulation.AdvanceTick);
         Assert.Same(before, simulation.State);
         Assert.Same(before.World, simulation.State.World);
@@ -28,5 +29,6 @@ internal static class SurvivalFixture
         Assert.Equal(before.TickCount, simulation.TickCount);
         Assert.Equal(random, simulation.RandomState);
         Assert.Equal(nextFoodId, simulation.NextFoodId);
+        Assert.Equal(nextOrganismId, simulation.NextOrganismId);
     }
 }

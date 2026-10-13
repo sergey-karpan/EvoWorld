@@ -17,6 +17,10 @@ public sealed class SimulationSettings
     public double FoodPickupRadius { get; }
     public double FoodRegenerationIntervalSeconds { get; }
     public int MaxFoodCount { get; }
+    public double ReproductionEnergyThreshold { get; }
+    public double ReproductionEnergyCost { get; }
+    public double OffspringInitialEnergy { get; }
+    public int MaxOrganismCount { get; }
 
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight)
         : this(seed, tickDurationSeconds, worldWidth, worldHeight, DefaultOrganismCount, DefaultFoodCount)
@@ -49,6 +53,18 @@ public sealed class SimulationSettings
         int initialOrganismCount, int initialFoodCount, double organismSpeed,
         double organismEnergyDrainPerSecond, double foodPickupRadius,
         double foodRegenerationIntervalSeconds, int maxFoodCount)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight, initialOrganismCount,
+            initialFoodCount, organismSpeed, organismEnergyDrainPerSecond, foodPickupRadius,
+            foodRegenerationIntervalSeconds, maxFoodCount, 150, 50, 50, 500)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
@@ -63,6 +79,12 @@ public sealed class SimulationSettings
             throw new ArgumentOutOfRangeException(nameof(foodPickupRadius));
         ValidatePositiveFinite(foodRegenerationIntervalSeconds, nameof(foodRegenerationIntervalSeconds));
         ArgumentOutOfRangeException.ThrowIfNegative(maxFoodCount);
+        ValidatePositiveFinite(reproductionEnergyThreshold, nameof(reproductionEnergyThreshold));
+        ValidatePositiveFinite(reproductionEnergyCost, nameof(reproductionEnergyCost));
+        ValidatePositiveFinite(offspringInitialEnergy, nameof(offspringInitialEnergy));
+        if (offspringInitialEnergy > reproductionEnergyCost)
+            throw new ArgumentOutOfRangeException(nameof(offspringInitialEnergy));
+        ArgumentOutOfRangeException.ThrowIfNegative(maxOrganismCount);
 
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
@@ -75,6 +97,10 @@ public sealed class SimulationSettings
         FoodPickupRadius = foodPickupRadius;
         FoodRegenerationIntervalSeconds = foodRegenerationIntervalSeconds;
         MaxFoodCount = maxFoodCount;
+        ReproductionEnergyThreshold = reproductionEnergyThreshold;
+        ReproductionEnergyCost = reproductionEnergyCost;
+        OffspringInitialEnergy = offspringInitialEnergy;
+        MaxOrganismCount = maxOrganismCount;
     }
 
     public static SimulationSettings CreateDefault() => new(42UL, 1.0 / 30.0, 1000.0, 700.0);

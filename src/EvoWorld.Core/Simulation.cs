@@ -5,7 +5,9 @@ namespace EvoWorld.Core;
 /// <summary>A single-threaded fixed-step simulation. Not thread-safe.</summary>
 public sealed class Simulation
 {
-    private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId);
+    private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId, long NextOrganismId);
+    internal const double OffspringPositionOffsetRadius = 5.0;
+    internal const double OffspringHeadingOffsetMaxRadians = 0.1;
     private Advancement _advancement;
     private readonly long _regenerationTicks;
 
@@ -14,6 +16,7 @@ public sealed class Simulation
     public long TickCount => State.TickCount;
     internal Pcg32State RandomState => _advancement.Random;
     internal long NextFoodId => _advancement.NextFoodId;
+    internal long NextOrganismId => _advancement.NextOrganismId;
     // Narrow test seam: force the real WorldState constructor to reject its input
     // after tentative spawn draws, without exposing any public mutation facility.
     internal bool FailWorldConstructionForTesting { get; set; }
@@ -25,14 +28,15 @@ public sealed class Simulation
         _regenerationTicks = FoodRegenerationSchedule.Calculate(settings.FoodRegenerationIntervalSeconds, settings.TickDurationSeconds);
         var random = new Pcg32(settings.Seed);
         var state = new SimulationState(WorldInitializer.Create(settings, random), 0);
-        _advancement = new(state, random.CaptureState(), settings.InitialFoodCount);
+        _advancement = new(state, random.CaptureState(), settings.InitialFoodCount, settings.InitialOrganismCount);
     }
 
     // Test-only starting snapshot seam: immutable input, validated invariants,
     // and the same post-initialization RNG as the public constructor. Counts may
     // shrink or include regenerated food; IDs may have gaps. Explicit history is
     // optional for testing previously allocated IDs no longer present in the world.
-    internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0, long? nextFoodId = null)
+    internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0,
+        long? nextFoodId = null, long? nextOrganismId = null)
         : this(settings)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -43,7 +47,12 @@ public sealed class Simulation
         var nextId = nextFoodId ?? minimumId;
         if (nextId < minimumId || nextId > int.MaxValue + 1L)
             throw new ArgumentOutOfRangeException(nameof(nextFoodId));
-        _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId);
+        var minimumOrganismId = Math.Max((long)settings.InitialOrganismCount,
+            world.Organisms.Count == 0 ? 0 : (long)world.Organisms[^1].Id + 1);
+        var nextOrganism = nextOrganismId ?? minimumOrganismId;
+        if (nextOrganism < minimumOrganismId || nextOrganism > int.MaxValue + 1L)
+            throw new ArgumentOutOfRangeException(nameof(nextOrganismId));
+        _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId, nextOrganism);
     }
 
     public void AdvanceTick()
@@ -110,23 +119,50 @@ public sealed class Simulation
             if (!consumed[index]) remainingFood.Add(foodItems[index]);
         var nextRandom = previousAdvancement.Random;
         var nextId = previousAdvancement.NextFoodId;
+        var nextOrganismId = previousAdvancement.NextOrganismId;
+        Pcg32? random = null;
         if (_regenerationTicks != 0 && nextTick % _regenerationTicks == 0
             && remainingFood.Count < Settings.MaxFoodCount)
         {
             var id = checked((int)nextId);
-            var random = new Pcg32(nextRandom);
+            random = new Pcg32(nextRandom);
             var x = WorldInitializer.NextScaled(random, Settings.WorldWidth);
             var y = WorldInitializer.NextScaled(random, Settings.WorldHeight);
             if (!ValidPosition(x, y, previous.World))
                 throw new OverflowException("Regenerated food must lie within the world.");
             remainingFood.Add(new Food(id, x, y, WorldInitializer.InitialFoodEnergy));
-            nextRandom = random.CaptureState();
             nextId++;
         }
+        var offspring = new List<Organism>();
+        var parentCount = survivors.Count;
+        for (var index = 0; index < parentCount; index++)
+        {
+            var parent = survivors[index];
+            if (parentCount + offspring.Count >= Settings.MaxOrganismCount
+                || parent.Energy < Settings.ReproductionEnergyThreshold) continue;
+            var parentEnergy = parent.Energy - Settings.ReproductionEnergyCost;
+            if (!double.IsFinite(parentEnergy))
+                throw new OverflowException("Parent energy after reproduction must be finite.");
+            if (parentEnergy <= 0) continue;
+            var id = checked((int)nextOrganismId);
+            random ??= new Pcg32(nextRandom);
+            var positionUnit = random.NextUInt() / 4294967296.0;
+            var offsetAngle = positionUnit * (2 * Math.PI);
+            var childX = ClampOffspringPosition(parent.X, OffspringPositionOffsetRadius * Math.Cos(offsetAngle), Settings.WorldWidth);
+            var childY = ClampOffspringPosition(parent.Y, OffspringPositionOffsetRadius * Math.Sin(offsetAngle), Settings.WorldHeight);
+            var headingUnit = random.NextUInt() / 4294967296.0;
+            var headingDelta = (2 * headingUnit - 1) * OffspringHeadingOffsetMaxRadians;
+            var childHeading = Normalize(parent.HeadingRadians + headingDelta);
+            offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy));
+            survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy);
+            nextOrganismId++;
+        }
+        survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.
+        nextRandom = random?.CaptureState() ?? nextRandom;
         var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight,
             FailWorldConstructionForTesting ? null! : survivors, remainingFood);
         var next = new SimulationState(world, nextTick);
-        var advancement = new Advancement(next, nextRandom, nextId);
+        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId);
         _advancement = advancement; // Sole commit: state, stream position, and ID history.
     }
 
@@ -148,10 +184,19 @@ public sealed class Simulation
         return result < fullTurn ? result : Math.BitDecrement(fullTurn);
     }
 
+    private static double ClampOffspringPosition(double position, double offset, double dimension)
+    {
+        // Offset is finite and bounded by five. Compare after addition to preserve
+        // ordinary rounding; saturation also handles a positive overflowing candidate.
+        var candidate = position + offset;
+        if (candidate < 0) return 0;
+        return candidate >= dimension ? Math.BitDecrement(dimension) : candidate;
+    }
+
     private static void ValidateStartingWorld(SimulationSettings settings, WorldState world)
     {
         if (world.WorldWidth != settings.WorldWidth || world.WorldHeight != settings.WorldHeight
-            || world.Organisms.Count > settings.InitialOrganismCount
+            || world.Organisms.Count > Math.Max(settings.InitialOrganismCount, settings.MaxOrganismCount)
             || world.FoodItems.Count > Math.Max(settings.InitialFoodCount, settings.MaxFoodCount))
             throw new ArgumentException("Starting world must match dimensions and supported population limits.", nameof(world));
         for (var i = 0; i < world.Organisms.Count; i++)

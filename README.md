@@ -175,7 +175,7 @@ double bits calculated independently in Python from Task 2 golden outputs.
 `new Simulation(settings)` owns one persistent PCG32 stream. Initialization uses
 the seeded generator and retains its stream state. `AdvanceTick()` advances
 exactly one configured timestep. Movement and survival consume zero random outputs;
-regeneration consumes two per successful spawn. The engine is
+regeneration consumes two per successful spawn and reproduction two per birth. The engine is
 single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
 with `World` and `TickCount`; previous world and simulation snapshots remain valid.
 
@@ -221,7 +221,7 @@ Each tick processes organisms in ascending stable ID order:
    within the inclusive pickup radius: nearest distance, then smallest food ID
    when computed distances are exactly equal.
 5. Add that food's energy without an energy cap and create a replacement organism.
-6. Build surviving-organism and unconsumed-food collections, regenerate food, then publish one
+6. Build surviving-organism and unconsumed-food collections, regenerate food, reproduce, then publish one
    complete immutable snapshot with the incremented tick count.
 
 An exhausted organism cannot be rescued by food that tick. Earlier organism IDs
@@ -230,7 +230,8 @@ food. Movement never depends on positions updated earlier in the tick. Food stay
 stationary until consumed. Unconsumed food objects are reused. IDs remain stable,
 may have gaps, and are never renumbered. An extinct world continues ticking.
 The internal test constructor accepts shrinking counts and strictly ascending,
-unique, nonnegative IDs. Organisms cannot exceed the initial count; food cannot
+unique, nonnegative IDs. Organisms cannot exceed the greater of initial count and
+reproduction ceiling; food cannot
 exceed the greater of initial food count and regeneration ceiling.
 
 Energy cost, subtraction, and gain must remain finite; invalid arithmetic throws
@@ -285,15 +286,62 @@ OverflowException. Cap-blocked events do not attempt allocation, even when IDs
 are exhausted. Tick-count overflow also fails without committing changes.
 
 Each permitted spawn uses a temporary copy of the exact current PCG32 state,
-without seeding or initial draws. The world snapshot, stream state, and next ID
+without seeding or initial draws. The world snapshot, stream state, and both next IDs
 are held in one private immutable advancement record. All construction finishes
 before replacing that single reference. Failures after tentative draws or feeding
 leave every committed component unchanged, and retries start from the same stream.
 The application remains single-threaded; no locks or background scheduling exist.
 
 Food regeneration supplies a renewable resource but does not guarantee a living
-population: organisms still have no food-seeking behavior or reproduction.
+population: organisms still have no food-seeking behavior.
 Existing movement/reflection and binary64 distance limitations still apply.
+
+## Asexual Reproduction
+
+Surviving parents can produce one offspring per tick after feeding and food
+regeneration. The immutable settings default to threshold 150, cost 50,
+offspring energy 50, and population ceiling 500. All older constructor signatures
+remain supported; the fifteen-argument constructor appends these values.
+Threshold, cost, and offspring energy must be finite and positive; offspring
+energy cannot exceed cost. A nonnegative ceiling of zero disables births without
+deleting initial organisms, even when the initial population exceeds the ceiling.
+
+Parents are considered in ascending ID order using their post-feeding energy.
+Energy must meet the threshold, and subtracting cost must leave strictly positive
+finite energy. Population capacity uses all survivors plus earlier births, so
+deaths open slots and lower parent IDs get first opportunity. A skipped birth
+deducts no cost, allocates no ID, and consumes no random values. Default births
+conserve energy; a smaller offspring energy loses the difference as overhead.
+
+Each successful birth uses two outputs from the same tentative PCG32 stream,
+after any food-regeneration draws. First, output / 2^32 is multiplied by 2*pi;
+cosine and sine of this angle are each multiplied by fixed radius 5 and added
+to the parent's post-movement coordinates. Negative candidates clamp to zero;
+candidates at or above a dimension clamp to Math.BitDecrement(dimension),
+including a positive overflowing candidate. Placement never reflects or retries;
+overlap is allowed. Second, output / 2^32 produces delta=(2*unit-1)*0.1 radians,
+which is added to the parent's heading and normalized using Task 4's convention.
+The parent heading is unchanged. Calculations follow this order using .NET math;
+cross-runtime bitwise equivalence is not promised.
+
+The child receives exactly configured offspring energy and a monotonic ID.
+Its long allocation counter starts at the initial population; custom internal
+test worlds also account for the highest ID and optional removed-ID history.
+int.MaxValue is the final allocatable ID; another permitted birth throws
+OverflowException. Skipped births at an exhausted counter remain valid.
+
+Only the original survivors participate in reproduction. Children are appended
+in ID order and appear in the birth snapshot, but do not move, drain energy,
+feed, or reproduce until the next tick. Regenerated food is also unavailable
+during its creation tick. World, RNG, and both allocation counters commit through
+the same single immutable advancement-record replacement. Failure after any
+tentative births or draws preserves every previous committed component.
+
+This is reproduction with a position and heading reference from one parent.
+Speed, metabolic drain, and pickup radius remain shared global settings.
+There is no individual genome, inherited genetic trait, mutation, or adaptive
+evolution. Per-organism traits, genetic inheritance, mutation, sexual reproduction,
+food-seeking, advanced metabolism, speciation, and persistence remain deferred.
 
 ## Development Status
 
@@ -306,7 +354,8 @@ Task 4 adds constant-speed fixed-step movement, reflection, and immutable
 simulation snapshots. Task 4.5 adds world rendering and basic playback controls.
 Task 5 adds baseline metabolism, food consumption, energy recovery, and death.
 Task 6 adds deterministic food regeneration with transactional RNG and ID history.
-Reproduction, genetic inheritance, mutation, steering and food-seeking, advanced
+Task 7 adds asexual reproduction, energy transfer, and bounded heading variation.
+Genetic inheritance, mutation, steering and food-seeking, advanced
 metabolism, evolution, persistence, and interactive configuration remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,

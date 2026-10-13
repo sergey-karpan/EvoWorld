@@ -9,12 +9,12 @@ public class FoodRegenerationTests
     internal static SimulationSettings Settings(double duration = 1, double interval = 1, int cap = 10,
         int organisms = 0, int food = 0, double width = 100, double height = 80,
         double drain = 0, double radius = 0) =>
-        new(42, duration, width, height, organisms, food, 0, drain, radius, interval, cap);
+        new(42, duration, width, height, organisms, food, 0, drain, radius, interval, cap, 150, 50, 50, 0);
 
     [Fact]
     public void SkippedEventIsNotRecoveredWhenCapacityOpensBetweenEvents()
     {
-        var settings = new SimulationSettings(42, 1, 100, 80, 1, 1, 1, 0, 0, 2, 1);
+        var settings = new SimulationSettings(42, 1, 100, 80, 1, 1, 1, 0, 0, 2, 1, 150, 50, 50, 0);
         var simulation = new Simulation(settings, new WorldState(100, 80,
             [new Organism(0, 0, 1, 0, 100)], [new Food(0, 3, 1, 20)]));
         var random = simulation.RandomState;
@@ -225,6 +225,7 @@ public class FoodRegenerationTests
         var expectedRandom = new Pcg32(42);
         for (var i = 0; i < 260; i++) expectedRandom.NextUInt();
         var previousId = first.NextFoodId;
+        var previousOrganismId = first.NextOrganismId;
         for (var tick = 1; tick <= 5000; tick++)
         {
             first.AdvanceTick(); second.AdvanceTick();
@@ -243,6 +244,12 @@ public class FoodRegenerationTests
                 second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy)).ToArray());
             Assert.Equal(first.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray(),
                 second.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray());
+            while (previousOrganismId < first.NextOrganismId)
+            {
+                expectedRandom.NextUInt(); expectedRandom.NextUInt(); previousOrganismId++;
+            }
+            Assert.Equal(previousOrganismId, second.NextOrganismId);
+            Assert.InRange(first.State.World.Organisms.Count, 0, 500);
             Assert.Equal(expectedRandom.CaptureState(), first.RandomState);
             Assert.Equal(first.RandomState, second.RandomState);
             Assert.InRange(first.State.World.FoodItems.Count, 0, 200);

@@ -54,6 +54,7 @@ public class SurvivalTests
         var expectedRandom = new Pcg32(42);
         for (var i = 0; i < 260; i++) expectedRandom.NextUInt();
         var nextFoodId = first.NextFoodId;
+        var nextOrganismId = first.NextOrganismId;
         for (var tick = 1; tick <= 1000; tick++)
         {
             first.AdvanceTick(); second.AdvanceTick();
@@ -70,6 +71,11 @@ public class SurvivalTests
                 expectedRandom.NextUInt(); expectedRandom.NextUInt();
                 nextFoodId = first.NextFoodId;
             }
+            while (nextOrganismId < first.NextOrganismId)
+            {
+                expectedRandom.NextUInt(); expectedRandom.NextUInt(); nextOrganismId++;
+            }
+            Assert.Equal(nextOrganismId, second.NextOrganismId);
             Assert.Equal(expectedRandom.CaptureState(), first.RandomState);
             Assert.Equal(first.RandomState, second.RandomState);
         }

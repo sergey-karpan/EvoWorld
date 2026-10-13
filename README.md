@@ -138,25 +138,104 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, neural networks, predators and
+correlations, lineage and generational statistics, neural weight mutation, predators and
 visualization beyond simple coloring remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
-## Neural Network Infrastructure
+## Optional Neural Control
 
-Task 11a adds `NeuralGenome`, an immutable fixed 6 → 8 → 2 tanh network with
-74 defensively copied weights and biases in [-8,8]. `Weights` exposes a read-only
-span, `CreateZero()` creates zero parameters, and `Forward(inputs, outputs)`
-deterministically evaluates six finite inputs in [-1,1] into two caller-provided
-output slots without per-call heap allocation. It is not yet integrated into
-the simulation; input/output mapping and integration are planned for Task 11b.
+Task 11a introduced `NeuralGenome`, an immutable fixed 6 → 8 → 2 tanh network
+with 74 defensively copied weights and biases in [-8,8]. `Weights` exposes a
+read-only span, `CreateZero()` creates zero parameters, and `Forward(inputs,
+outputs)` evaluates normalized inputs into caller-provided storage without
+per-call heap allocation. Task 11b integrates this controller into the simulation.
+
+`EnableNeuralControl` defaults to false, preserving Task 9 steering, Task 10
+behavior and historical RNG contracts. Every organism has a non-null `Brain`;
+legacy constructors share an immutable zero brain. When enabled, neural control
+replaces Task 9 steering completely, including when the brain is zero or no food
+is sensed. Zero brains preserve heading before reflection and inherited movement
+speed. Replacements and newborns retain the exact parent brain reference in both
+modes. No neural weights mutate, and newborns first act on the following tick.
+
+The 38-argument settings constructor appends five immutable settings:
+
+| Setting | Default | Validation |
+|---|---:|---|
+| EnableNeuralControl | false | Explicit opt-in |
+| NeuralWeightMin | -1 | Finite, within [-8,8], at or below zero |
+| NeuralWeightMax | 1 | Finite, within [-8,8], at or above zero, greater than minimum |
+| InitialNeuralWeightVariationAmplitude | 0.5 | Finite, nonnegative |
+| SpeedModulationAmplitude | 0.5 | Finite, nonnegative, strictly less than 1 |
+
+All older signatures retain these defaults. Neural settings are validated even
+when disabled; custom brains need only satisfy `NeuralGenome`'s [-8,8] bounds.
+
+After drain and before movement/feeding, survivors encode these six channels
+from their starting position, heading and inherited traits:
+
+| Input | Meaning |
+|---|---|
+| 0 | Sine of shortest signed relative food bearing; exact half-turn uses +pi |
+| 1 | Cosine of that bearing (alignment) |
+| 2 | `1 - 2 * clamp(distance / SensingRadius, 0, 1)` |
+| 3 | `2 * clamp(post-drain energy / 100, 0, 1) - 1` |
+| 4 | `2 * clamp(fraction(Speed, MinSpeed, MaxSpeed), 0, 1) - 1` |
+| 5 | `1 - 2 * clamp(nearest wall distance / SensingRadius, 0, 1)` |
+
+Food eligibility and ties use Task 9's nearest not-yet-consumed food and smallest
+ID. No food gives `(0,1,-1)` for channels 0–2; positive-radius coincidence gives
+`(0,1,1)`. Zero radius disables sensing and gives channel 5=-1. Food regenerated
+this tick remains unavailable. Distance ratios use `FoodDistance`'s scaled
+representation; speed fractions use power-of-two scaling and saturate custom
+out-of-range traits. A tiny positive distance ratio may round to zero without
+changing direction into the coincidence convention. All channels are checked
+finite and within [-1,1].
+
+Output 0 commands signed rotation, multiplied by the overflow-safe limit
+`min(SteeringRate * timestep, pi)`, before ordinary movement and reflection.
+Zero rotation preserves the exact heading. Output 1 gives multiplier
+`1 + SpeedModulationAmplitude * output1`; at the default amplitude, speed lies
+within 0.5–1.5 times inherited Speed. `Math.Tanh` can round to exactly +/-1;
+the strict amplitude bound still keeps the multiplier positive. Modulation
+affects movement only, preserving inherited Speed and metabolic drain. Effective
+speed and movement-distance overflow throw before publication, retaining the
+existing reflection limitations and transactional rollback. This remains
+deterministic on the supported runtime, without a cross-platform bitwise promise.
+
+Initialization completes placement, Task 8 variation and Task 9 variation before
+neural weights. With neural control enabled and positive initial amplitude,
+each organism consumes exactly 74 draws in parameter order, mapping
+`(2 * output / 2^32 - 1) * amplitude` and clamping to the configured weight range.
+Disabled control or zero amplitude assigns shared zero brains with no neural draws.
+Let N be initial organisms and F initial food; Neural On below means that phase
+is active, requiring both enable=true and amplitude>0:
+
+| Task 8 variation | Task 9 variation | Neural | Total initialization draws |
+|---|---|---|---|
+| Off | Off | Off | 3N + 2F |
+| On | Off | Off | 5N + 2F |
+| Off | On | Off | 5N + 2F |
+| On | On | Off | 7N + 2F |
+| Off | Off | On | 3N + 2F + 74N |
+| On | Off | On | 5N + 2F + 74N |
+| Off | On | On | 5N + 2F + 74N |
+| On | On | On | 7N + 2F + 74N |
+
+Each Task 8/9 group is inactive when both amplitudes are zero; otherwise it draws
+both channels per organism. Encoding and forward evaluation consume zero RNG.
+Food regeneration still draws two per spawn, then reproduction draws six per birth;
+one spawn and two births consume fourteen outputs. Brain inheritance adds none.
+Statistics retain their existing API and inherited-trait aggregation; measured
+populations may differ because neural control changes behavior. Neural weight
+mutation belongs to Task 11c. Learning, backpropagation and memory remain deferred.
 
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, fixed-step movement, survival,
 food regeneration, reproduction, trait mutation, reactive food seeking, and
-population statistics are implemented. Desktop provides dispatcher playback and
-trait coloring. Further ecosystem behavior remains planned.
+population statistics and optional neural control are implemented. Desktop
+provides dispatcher playback and trait coloring. Further ecosystem behavior remains planned.
 
 - Core owns world state, entities, rules, simulation time, RNG, energy, and
   collision calculations. Desktop owns controls, rendering, viewport
@@ -215,7 +294,8 @@ own defensive copies behind read-only views; ordinary reads do not copy.
 A fresh PCG32 consumes X, Y, heading for each organism in ascending ID order,
 then X, Y for each food item in ascending ID order. Placement consumes exactly
 `3 * InitialOrganismCount + 2 * InitialFoodCount` outputs, with no retries.
-This is also the total when all initial trait variation amplitudes are zero;
+This is also the total when all initial trait variation amplitudes are zero
+and the neural initialization phase is inactive;
 enabled variation phases add the draws documented below.
 IDs and initial energies (organisms: 100; food: 20) consume no random outputs.
 Overlaps are allowed. Coordinates use `output / 4294967296.0 * dimension`;
@@ -415,7 +495,8 @@ nonnegative, each minimum must be below its maximum, and baselines must lie
 within explicitly supplied ranges. Earlier constructors expand upper bounds to
 include large legacy baselines instead of clamping or rejecting them.
 
-With both initial amplitudes zero and sensing/steering variation disabled,
+With both initial amplitudes zero, sensing/steering variation disabled,
+and neural initialization inactive,
 original Task 3 placement, headings, food,
 and RNG state are preserved: 3 draws per organism and 2 per food. If either
 amplitude is nonzero, complete all original placement first, then draw speed
@@ -441,7 +522,7 @@ or random draws, and retries start from the same committed state.
 
 Heritable variation may affect survival and reproductive success, allowing
 selection to emerge. Adaptation, improvement, and population survival are not
-guaranteed. No generic genome exists. Neural networks, memory, learning,
+guaranteed. No generic genome exists. Neural weight mutation, memory, learning,
 sexual reproduction, crossover, speciation, and persistence remain deferred.
 Task 10 implements basic trait-based coloring; advanced trait visualization
 remains deferred.
@@ -479,8 +560,8 @@ amplitude is nonzero. With N organisms and F food items, the four modes consume
 3N+2F, 5N+2F (old only), 5N+2F (new only), or 7N+2F (both). Old-only Task 8 values
 and stream states remain unchanged; no traits are interleaved with placement.
 
-After metabolic drain, each survivor searches food not consumed by earlier IDs,
-using its starting position. FoodDistance selects the nearest within the inclusive
+With neural control disabled, after metabolic drain each survivor searches food
+not consumed by earlier IDs, using its starting position. FoodDistance selects the nearest within the inclusive
 sensing radius, with smallest-ID ties. Radius zero disables sensing entirely,
 including coincidence. Positive-radius coincident food is a valid nearest target
 but preserves heading; pickup still happens only after movement. Regenerated
@@ -525,9 +606,11 @@ Task 8 adds individual Speed and Metabolism with inheritance and bounded mutatio
 Task 9 adds individual sensing and steering with reactive food seeking.
 Task 10 adds population statistics, derived birth/death counters since each
 simulation's starting snapshot, and Desktop trait coloring and statistics display.
-Task 11a adds the immutable 6→8→2 NeuralGenome infrastructure with validated weights, 
-deterministic forward evaluation, and comprehensive numerical tests. Neural behavior 
-integration remains planned for Task 11b.
+Task 11a adds the immutable 6→8→2 NeuralGenome infrastructure with validated
+weights, deterministic forward evaluation, and comprehensive numerical tests.
+Task 11b adds optional neural steering and speed modulation, deterministic
+initial weights, and exact brain inheritance; neural weight mutation is deferred
+to Task 11c.
 
 Additional traits, persistence, and interactive
 configuration remain deferred.

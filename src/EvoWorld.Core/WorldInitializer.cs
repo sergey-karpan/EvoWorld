@@ -4,7 +4,7 @@ namespace EvoWorld.Core;
 
 public static class WorldInitializer
 {
-    private const double InitialOrganismEnergy = 100.0;
+    internal const double InitialOrganismEnergy = 100.0;
     internal const double InitialFoodEnergy = 20.0;
 
     /// <summary>
@@ -65,6 +65,24 @@ public static class WorldInitializer
                     settings.MinSteeringRate, settings.MaxSteeringRate, random.NextUInt());
                 organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
                     organism.Energy, organism.Speed, organism.Metabolism, sensing, steering);
+            }
+        }
+        if (settings.EnableNeuralControl && settings.InitialNeuralWeightVariationAmplitude > 0)
+        {
+            // Complete placement and both trait phases first; fixed organism/parameter order.
+            var weights = new double[NeuralGenome.WeightCount];
+            for (var id = 0; id < organisms.Length; id++)
+            {
+                for (var index = 0; index < weights.Length; index++)
+                {
+                    var signed = 2.0 * (random.NextUInt() / 4294967296.0) - 1.0;
+                    weights[index] = Math.Clamp(signed * settings.InitialNeuralWeightVariationAmplitude,
+                        settings.NeuralWeightMin, settings.NeuralWeightMax);
+                }
+                var organism = organisms[id];
+                organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
+                    organism.Energy, organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate,
+                    new NeuralGenome(weights));
             }
         }
         return new WorldState(settings.WorldWidth, settings.WorldHeight, organisms, foodItems);

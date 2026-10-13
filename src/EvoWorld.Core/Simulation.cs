@@ -108,10 +108,12 @@ public sealed class Simulation
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
-            var heading = FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds);
+            var (heading, effectiveSpeed) = Settings.EnableNeuralControl
+                ? NeuralControl.Evaluate(organism, energy, foodItems, consumed, Settings)
+                : (FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds), organism.Speed);
             if (FailSteeringForOrganismIdForTesting == organism.Id)
                 throw new InvalidOperationException("Injected steering failure.");
-            var distance = organism.Speed * Settings.TickDurationSeconds;
+            var distance = effectiveSpeed * Settings.TickDurationSeconds;
             if (!double.IsFinite(distance))
                 throw new OverflowException("Movement distance must be finite.");
             var (cosine, sine) = Direction(heading);
@@ -132,7 +134,7 @@ public sealed class Simulation
                 consumed[selected] = true;
             }
             survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy,
-                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate));
+                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain));
         }
 
         var remainingFood = new List<Food>(foodItems.Count);
@@ -184,9 +186,9 @@ public sealed class Simulation
             var childSteeringRate = TraitVariation.Apply(parent.SteeringRate, Settings.SteeringRateMutationAmplitude,
                 Settings.MinSteeringRate, Settings.MaxSteeringRate, random.NextUInt());
             offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
-                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate));
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, parent.Brain));
             survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
-                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate);
+                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain);
             nextOrganismId++;
         }
         survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.

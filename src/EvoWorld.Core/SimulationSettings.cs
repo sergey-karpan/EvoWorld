@@ -39,6 +39,11 @@ public sealed class SimulationSettings
     public double MaxSteeringRate { get; }
     public double SensingRadiusMutationAmplitude { get; }
     public double SteeringRateMutationAmplitude { get; }
+    public bool EnableNeuralControl { get; }
+    public double NeuralWeightMin { get; }
+    public double NeuralWeightMax { get; }
+    public double InitialNeuralWeightVariationAmplitude { get; }
+    public double SpeedModulationAmplitude { get; }
 
     public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight)
         : this(seed, tickDurationSeconds, worldWidth, worldHeight, DefaultOrganismCount, DefaultFoodCount)
@@ -122,6 +127,32 @@ public sealed class SimulationSettings
         double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
         double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
         double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight, initialOrganismCount, initialFoodCount,
+            organismSpeed, organismEnergyDrainPerSecond, foodPickupRadius, foodRegenerationIntervalSeconds,
+            maxFoodCount, reproductionEnergyThreshold, reproductionEnergyCost, offspringInitialEnergy,
+            maxOrganismCount, initialSpeedVariationAmplitude, initialMetabolismVariationAmplitude,
+            minSpeed, maxSpeed, minMetabolism, maxMetabolism, speedMutationAmplitude, metabolismMutationAmplitude,
+            organismSensingRadius, organismSteeringRate, initialSensingRadiusVariationAmplitude,
+            initialSteeringRateVariationAmplitude, minSensingRadius, maxSensingRadius, minSteeringRate,
+            maxSteeringRate, sensingRadiusMutationAmplitude, steeringRateMutationAmplitude, false, -1, 1, 0.5, 0.5)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
+        bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
+        double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
@@ -171,6 +202,14 @@ public sealed class SimulationSettings
             throw new ArgumentOutOfRangeException(nameof(organismSteeringRate));
         ValidateNonnegativeFinite(sensingRadiusMutationAmplitude, nameof(sensingRadiusMutationAmplitude));
         ValidateNonnegativeFinite(steeringRateMutationAmplitude, nameof(steeringRateMutationAmplitude));
+        if (!double.IsFinite(neuralWeightMin) || neuralWeightMin < -NeuralGenome.MaxAbsoluteWeight || neuralWeightMin > 0)
+            throw new ArgumentOutOfRangeException(nameof(neuralWeightMin));
+        if (!double.IsFinite(neuralWeightMax) || neuralWeightMax > NeuralGenome.MaxAbsoluteWeight || neuralWeightMax < 0
+            || neuralWeightMin >= neuralWeightMax)
+            throw new ArgumentOutOfRangeException(nameof(neuralWeightMax));
+        ValidateNonnegativeFinite(initialNeuralWeightVariationAmplitude, nameof(initialNeuralWeightVariationAmplitude));
+        ValidateNonnegativeFinite(speedModulationAmplitude, nameof(speedModulationAmplitude));
+        if (speedModulationAmplitude >= 1) throw new ArgumentOutOfRangeException(nameof(speedModulationAmplitude));
 
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
@@ -199,6 +238,10 @@ public sealed class SimulationSettings
         MinSteeringRate = minSteeringRate; MaxSteeringRate = maxSteeringRate;
         SensingRadiusMutationAmplitude = sensingRadiusMutationAmplitude;
         SteeringRateMutationAmplitude = steeringRateMutationAmplitude;
+        EnableNeuralControl = enableNeuralControl;
+        NeuralWeightMin = neuralWeightMin; NeuralWeightMax = neuralWeightMax;
+        InitialNeuralWeightVariationAmplitude = initialNeuralWeightVariationAmplitude;
+        SpeedModulationAmplitude = speedModulationAmplitude;
     }
 
     public static SimulationSettings CreateDefault() => new(42UL, 1.0 / 30.0, 1000.0, 700.0);

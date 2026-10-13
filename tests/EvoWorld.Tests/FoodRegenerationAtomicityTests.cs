@@ -41,7 +41,7 @@ public class FoodRegenerationAtomicityTests
     {
         var settings = FoodRegenerationTests.Settings(organisms: 3, food: 1, cap: 1, drain: 1, radius: 1000);
         var world = new WorldState(100, 80,
-            [new Organism(0, 1, 1, 0, 1), new Organism(2, 1, 1, 0, 10), new Organism(9, 2, 2, 0, 10)], [new Food(4, 1, 1, 20)]);
+            [new Organism(0, 1, 1, 0, 1, 0, 1), new Organism(2, 1, 1, 0, 10, 0, 1), new Organism(9, 2, 2, 0, 10, 0, 1)], [new Food(4, 1, 1, 20)]);
         var simulation = new Simulation(settings, world) { FailWorldConstructionForTesting = true };
         var previous = simulation.State;
         var random = simulation.RandomState;
@@ -62,7 +62,7 @@ public class FoodRegenerationAtomicityTests
     [Fact]
     public void SurvivalFailureBeforeSpawnPreservesRandomAndNextId()
     {
-        var settings = FoodRegenerationTests.Settings(duration: 2, drain: double.MaxValue);
+        var settings = FoodRegenerationTests.Settings(duration: 2, drain: double.MaxValue, organisms: 1);
         SurvivalFixture.AssertRollback(new Simulation(settings));
     }
 

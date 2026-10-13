@@ -24,7 +24,7 @@ public class InheritanceTests
         var simulation = ReproductionFixture.Create([new Organism(0, 50, 40, 1, 160)]);
         Assert.Equal(new Pcg32State(10355249797275478817UL, 3), simulation.RandomState);
         var random = new Pcg32(simulation.RandomState);
-        Assert.Equal(4091771729U, random.NextUInt()); Assert.Equal(3882238836U, random.NextUInt());
+        Assert.Equal(4091771729U, random.NextUInt()); Assert.Equal(3882238836U, random.NextUInt()); random.NextUInt(); random.NextUInt();
         simulation.AdvanceTick();
         var child = simulation.State.World.Organisms[1];
         Assert.Equal(54.78071537944788, child.X, 12); Assert.Equal(38.53549992806059, child.Y, 12);
@@ -45,7 +45,7 @@ public class InheritanceTests
         var y = boundary == 0 ? 0 : boundary == 3 ? Math.BitDecrement(80.0) : 40;
         Food[] food = boundary >= 2 ? [new Food(0, 99, 79, 20)] : [];
         var simulation = ReproductionFixture.Create([new Organism(0, x, y, 0, 160)], food);
-        var random = new Pcg32(simulation.RandomState); random.NextUInt(); random.NextUInt();
+        var random = new Pcg32(simulation.RandomState); random.NextUInt(); random.NextUInt(); random.NextUInt(); random.NextUInt();
         simulation.AdvanceTick(); var child = simulation.State.World.Organisms[1];
         if (boundary == 0) Assert.Equal(0, child.Y);
         if (boundary == 1) Assert.Equal(Math.BitDecrement(100.0), child.X);
@@ -86,7 +86,7 @@ public class InheritanceTests
     }
 
     [Fact]
-    public void FoodRegenerationThenTwoBirthsConsumeSixOutputsInRequiredOrder()
+    public void FoodRegenerationThenTwoBirthsConsumeTenOutputsInRequiredOrder()
     {
         var simulation = ReproductionFixture.Create([new Organism(2, 50, 40, 0, 160), new Organism(9, 60, 40, 1, 160)], foodCap: 10);
         Assert.Equal(new Pcg32State(13903747487881639386UL, 3), simulation.RandomState);
@@ -97,9 +97,9 @@ public class InheritanceTests
         var first = simulation.State.World.Organisms[2]; var second = simulation.State.World.Organisms[3];
         Assert.Equal(54.81481665574779, first.X, 12); Assert.Equal(41.34816192333625, first.Y, 12);
         Assert.Equal(6.234506593142645, first.HeadingRadians, 14);
-        Assert.Equal(59.86047986560324, second.X, 12); Assert.Equal(35.00194696585781, second.Y, 12);
-        Assert.Equal(0.971026633027941, second.HeadingRadians, 14);
-        Assert.Equal(new Pcg32State(3538481550176492632UL, 3), simulation.RandomState);
+        Assert.Equal(64.37719989071232, second.X, 12); Assert.Equal(42.41663425382245, second.Y, 12);
+        Assert.Equal(0.952093210304156, second.HeadingRadians, 14);
+        Assert.Equal(new Pcg32State(11742290374445839356UL, 3), simulation.RandomState);
         Assert.Equal(new[] { 110.0, 110.0, 50.0, 50.0 }, simulation.State.World.Organisms.Select(o => o.Energy).ToArray());
     }
 }

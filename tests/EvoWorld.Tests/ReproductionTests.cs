@@ -29,7 +29,7 @@ public class ReproductionTests
         simulation.AdvanceTick();
         Assert.Equal(count, simulation.State.World.Organisms.Count);
         Assert.Equal(parentEnergy, simulation.State.World.Organisms[0].Energy);
-        if (count == 2) { random.NextUInt(); random.NextUInt(); Assert.Equal(50, simulation.State.World.Organisms[1].Energy); }
+        if (count == 2) { random.NextUInt(); random.NextUInt(); random.NextUInt(); random.NextUInt(); Assert.Equal(50, simulation.State.World.Organisms[1].Energy); }
         Assert.Equal(random.CaptureState(), simulation.RandomState);
         Assert.Equal(nextId + count - 1, simulation.NextOrganismId);
     }
@@ -134,7 +134,7 @@ public class ReproductionTests
         Assert.Equal(45.23119332849486, child.X, 12); Assert.Equal(41.502824983092864, child.Y, 12);
         Assert.Equal(6.191875525387944, child.HeadingRadians, 14);
         Assert.Equal(1, Assert.Single(simulation.State.World.FoodItems).Id);
-        Assert.Equal(new Pcg32State(15569043114566951143UL, 3), simulation.RandomState);
+        Assert.Equal(new Pcg32State(5138641563937442505UL, 3), simulation.RandomState);
         simulation.AdvanceTick();
         Assert.Equal(new[] { 99.0, 69.0 }, simulation.State.World.Organisms.Select(o => o.Energy).ToArray());
         Assert.Empty(simulation.State.World.FoodItems);
@@ -142,6 +142,6 @@ public class ReproductionTests
         Assert.Equal(new[] { 98.0, 68.0 }, simulation.State.World.Organisms.Select(o => o.Energy).ToArray());
         Assert.Equal(new[] { 0, 1 }, simulation.State.World.Organisms.Select(o => o.Id).ToArray());
         Assert.Equal(2, simulation.NextOrganismId);
-        Assert.Equal(new Pcg32State(15569043114566951143UL, 3), simulation.RandomState);
+        Assert.Equal(new Pcg32State(5138641563937442505UL, 3), simulation.RandomState);
     }
 }

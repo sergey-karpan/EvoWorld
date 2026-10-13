@@ -11,7 +11,9 @@ internal static class ReproductionFixture
     {
         food ??= [];
         var settings = new SimulationSettings(42, 1, width, height, initialOrganisms ?? organisms.Length,
-            food.Length, speed, drain, radius, interval, foodCap, threshold, cost, childEnergy, cap);
-        return new Simulation(settings, new WorldState(width, height, organisms, food), tick, nextFoodId, nextOrganismId);
+            food.Length, speed, drain, radius, interval, foodCap, threshold, cost, childEnergy, cap,
+            0, 0, 0, Math.Max(200, speed), 0, Math.Max(5, drain), 0, 0);
+        var explicitTraits = organisms.Select(o => new Organism(o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, speed, drain));
+        return new Simulation(settings, new WorldState(width, height, explicitTraits, food), tick, nextFoodId, nextOrganismId);
     }
 }

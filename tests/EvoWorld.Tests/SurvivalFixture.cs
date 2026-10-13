@@ -12,7 +12,8 @@ internal static class SurvivalFixture
         food ??= [];
         var settings = new SimulationSettings(42, duration, width, height,
             initialOrganisms ?? organisms.Length, initialFood ?? food.Length, speed, drain, radius, 2, 0, 150, 50, 50, 0);
-        return new Simulation(settings, new WorldState(width, height, organisms, food));
+        var explicitTraits = organisms.Select(o => new Organism(o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, speed, drain));
+        return new Simulation(settings, new WorldState(width, height, explicitTraits, food));
     }
 
     internal static void AssertRollback(Simulation simulation)

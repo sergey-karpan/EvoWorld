@@ -180,7 +180,7 @@ public class MovementTests
             ? [] : [new Food(0, width / 3, height / 3, 20)];
         var settings = new SimulationSettings(42UL, duration, width, height, 1, food.Length, speed, 0, 0, 2, 0, 150, 50, 50, 0);
         var world = new WorldState(width, height,
-            [new Organism(0, x, y, heading, 100)], food);
+            [new Organism(0, x, y, heading, 100, speed, 0)], food);
         return new Simulation(settings, world);
     }
 }

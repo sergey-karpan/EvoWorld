@@ -103,7 +103,7 @@ public class SimulationTests
     {
         var settings = new SimulationSettings(42UL, 1, double.MaxValue, double.MaxValue, 2, 0, double.MaxValue, 1, 8, 2, 0, 150, 50, 50, 0);
         var world = new WorldState(double.MaxValue, double.MaxValue,
-            [new Organism(0, 0, 0, Math.PI, 100), new Organism(1, double.MaxValue / 2, 0, 0, 100)], []);
+            [new Organism(0, 0, 0, Math.PI, 100, double.MaxValue, 1), new Organism(1, double.MaxValue / 2, 0, 0, 100, double.MaxValue, 1)], []);
         // First organism is representable; the second candidate overflows.
         AssertRollback(new Simulation(settings, world));
     }
@@ -113,7 +113,7 @@ public class SimulationTests
     {
         var settings = new SimulationSettings(42UL, 1, 10, double.Epsilon, 2, 0, 1, 1, 8, 2, 0, 150, 50, 50, 0);
         var world = new WorldState(10, double.Epsilon,
-            [new Organism(0, 1, 0, 0, 100), new Organism(1, 1, 0, Math.PI / 2, 100)], []);
+            [new Organism(0, 1, 0, 0, 100, 1, 1), new Organism(1, 1, 0, Math.PI / 2, 100, 1, 1)], []);
         AssertRollback(new Simulation(settings, world));
     }
 

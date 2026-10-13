@@ -50,7 +50,7 @@ public class ReproductionAtomicityTests
     public void MovementFailurePrecedesBirthAndCannotLeakIdsOrRandomState()
     {
         var settings = new SimulationSettings(42, 2, 100, 80, 1, 0, double.MaxValue, 0, 0, 1, 2, 150, 50, 50, 10);
-        SurvivalFixture.AssertRollback(new Simulation(settings, new WorldState(100, 80, [new Organism(0, 50, 40, 0, 160)], [])));
+        SurvivalFixture.AssertRollback(new Simulation(settings, new WorldState(100, 80, [new Organism(0, 50, 40, 0, 160, double.MaxValue, 0)], [])));
     }
 
     [Fact]

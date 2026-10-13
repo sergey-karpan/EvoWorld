@@ -29,7 +29,8 @@ public static class WorldInitializer
             var x = NextScaled(random, settings.WorldWidth);
             var y = NextScaled(random, settings.WorldHeight);
             var heading = NextScaled(random, 2.0 * Math.PI);
-            organisms[id] = new Organism(id, x, y, heading, InitialOrganismEnergy);
+            organisms[id] = new Organism(id, x, y, heading, InitialOrganismEnergy,
+                settings.OrganismSpeed, settings.OrganismEnergyDrainPerSecond);
         }
 
         for (var id = 0; id < foodItems.Length; id++)
@@ -39,6 +40,19 @@ public static class WorldInitializer
             foodItems[id] = new Food(id, x, y, InitialFoodEnergy);
         }
 
+        if (settings.InitialSpeedVariationAmplitude != 0 || settings.InitialMetabolismVariationAmplitude != 0)
+        {
+            for (var id = 0; id < organisms.Length; id++)
+            {
+                var organism = organisms[id];
+                var speed = TraitVariation.Apply(organism.Speed, settings.InitialSpeedVariationAmplitude,
+                    settings.MinSpeed, settings.MaxSpeed, random.NextUInt());
+                var metabolism = TraitVariation.Apply(organism.Metabolism, settings.InitialMetabolismVariationAmplitude,
+                    settings.MinMetabolism, settings.MaxMetabolism, random.NextUInt());
+                organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
+                    organism.Energy, speed, metabolism);
+            }
+        }
         return new WorldState(settings.WorldWidth, settings.WorldHeight, organisms, foodItems);
     }
 

@@ -6,9 +6,9 @@ namespace EvoWorld.Tests;
 public class SurvivalNumericalTests
 {
     [Fact]
-    public void EnergyCostOverflowRollsBackEvenForEmptyWorld()
+    public void IndividualEnergyCostOverflowRollsBack()
     {
-        SurvivalFixture.AssertRollback(SurvivalFixture.Create([], drain: double.MaxValue, duration: 2));
+        SurvivalFixture.AssertRollback(SurvivalFixture.Create([new Organism(0, 1, 1, 0, 100)], drain: double.MaxValue, duration: 2));
     }
 
     [Fact]

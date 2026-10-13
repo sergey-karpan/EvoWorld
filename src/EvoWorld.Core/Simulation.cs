@@ -20,6 +20,8 @@ public sealed class Simulation
     // Narrow test seam: force the real WorldState constructor to reject its input
     // after tentative spawn draws, without exposing any public mutation facility.
     internal bool FailWorldConstructionForTesting { get; set; }
+    internal bool FailBeforeMutationForTesting { get; set; }
+    internal bool FailOffspringTraitConstructionForTesting { get; set; }
 
     public Simulation(SimulationSettings settings)
     {
@@ -60,9 +62,6 @@ public sealed class Simulation
         var previousAdvancement = _advancement;
         var previous = previousAdvancement.State;
         var nextTick = checked(previous.TickCount + 1);
-        var energyCost = Settings.OrganismEnergyDrainPerSecond * Settings.TickDurationSeconds;
-        if (!double.IsFinite(energyCost))
-            throw new OverflowException("Energy cost must be finite.");
 
         var survivors = new List<Organism>(previous.World.Organisms.Count);
         var foodItems = previous.World.FoodItems;
@@ -71,12 +70,14 @@ public sealed class Simulation
         for (var index = 0; index < previous.World.Organisms.Count; index++)
         {
             var organism = previous.World.Organisms[index];
+            var energyCost = organism.Metabolism * Settings.TickDurationSeconds;
+            if (!double.IsFinite(energyCost)) throw new OverflowException("Energy cost must be finite.");
             var energy = organism.Energy - energyCost;
             if (!double.IsFinite(energy))
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
-            var distance = Settings.OrganismSpeed * Settings.TickDurationSeconds;
+            var distance = organism.Speed * Settings.TickDurationSeconds;
             if (!double.IsFinite(distance))
                 throw new OverflowException("Movement distance must be finite.");
             var (cosine, sine) = Direction(organism.HeadingRadians);
@@ -111,7 +112,7 @@ public sealed class Simulation
                     throw new OverflowException("Organism energy after feeding must be finite.");
                 consumed[selected] = true;
             }
-            survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy));
+            survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy, organism.Speed, organism.Metabolism));
         }
 
         var remainingFood = new List<Food>(foodItems.Count);
@@ -153,8 +154,14 @@ public sealed class Simulation
             var headingUnit = random.NextUInt() / 4294967296.0;
             var headingDelta = (2 * headingUnit - 1) * OffspringHeadingOffsetMaxRadians;
             var childHeading = Normalize(parent.HeadingRadians + headingDelta);
-            offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy));
-            survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy);
+            if (FailBeforeMutationForTesting) throw new InvalidOperationException("Injected pre-mutation failure.");
+            var childSpeed = TraitVariation.Apply(parent.Speed, Settings.SpeedMutationAmplitude,
+                Settings.MinSpeed, Settings.MaxSpeed, random.NextUInt());
+            var childMetabolism = TraitVariation.Apply(parent.Metabolism, Settings.MetabolismMutationAmplitude,
+                Settings.MinMetabolism, Settings.MaxMetabolism, random.NextUInt());
+            offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism));
+            survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy, parent.Speed, parent.Metabolism);
             nextOrganismId++;
         }
         survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.
@@ -205,7 +212,9 @@ public sealed class Simulation
             if (entity.Id < 0 || (i > 0 && entity.Id <= world.Organisms[i - 1].Id)
                 || !ValidPosition(entity.X, entity.Y, world)
                 || !double.IsFinite(entity.HeadingRadians) || entity.HeadingRadians < 0.0
-                || entity.HeadingRadians >= 2.0 * Math.PI || !double.IsFinite(entity.Energy) || entity.Energy <= 0.0)
+                || entity.HeadingRadians >= 2.0 * Math.PI || !double.IsFinite(entity.Energy) || entity.Energy <= 0.0
+                || !double.IsFinite(entity.Speed) || entity.Speed < 0
+                || !double.IsFinite(entity.Metabolism) || entity.Metabolism < 0)
                 throw new ArgumentException("Starting organisms must satisfy world invariants.", nameof(world));
         }
         for (var i = 0; i < world.FoodItems.Count; i++)

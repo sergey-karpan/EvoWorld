@@ -16,7 +16,7 @@ public class FoodRegenerationTests
     {
         var settings = new SimulationSettings(42, 1, 100, 80, 1, 1, 1, 0, 0, 2, 1, 150, 50, 50, 0);
         var simulation = new Simulation(settings, new WorldState(100, 80,
-            [new Organism(0, 0, 1, 0, 100)], [new Food(0, 3, 1, 20)]));
+            [new Organism(0, 0, 1, 0, 100, 1, 0)], [new Food(0, 3, 1, 20)]));
         var random = simulation.RandomState;
         simulation.AdvanceTick(); simulation.AdvanceTick(); // Tick 2 is cap-blocked.
         Assert.Equal(random, simulation.RandomState);
@@ -125,7 +125,7 @@ public class FoodRegenerationTests
     {
         var settings = Settings(organisms: 1, food: 1, cap: 1, radius: 1000);
         var simulation = new Simulation(settings, new WorldState(100, 80,
-            [new Organism(2, 1, 1, 0, 100)], [new Food(4, 1, 1, 20)]));
+            [new Organism(2, 1, 1, 0, 100, 0, 0)], [new Food(4, 1, 1, 20)]));
         simulation.AdvanceTick();
         Assert.Equal(120, simulation.State.World.Organisms[0].Energy);
         Assert.Equal(5, Assert.Single(simulation.State.World.FoodItems).Id);
@@ -192,7 +192,7 @@ public class FoodRegenerationTests
     public void SmallManualTimelineCombinesSurvivalConsumptionAndRegeneration()
     {
         var settings = Settings(interval: 2, cap: 1, organisms: 1, drain: 1, radius: 1000);
-        var simulation = new Simulation(settings, new WorldState(100, 80, [new Organism(2, 1, 1, 0, 5)], []));
+        var simulation = new Simulation(settings, new WorldState(100, 80, [new Organism(2, 1, 1, 0, 5, 0, 1)], []));
         double[] energy = [4, 3, 22, 21, 40, 39];
         int[][] foodIds = [[], [0], [], [1], [], [2]];
         for (var tick = 1; tick <= 6; tick++)
@@ -207,7 +207,7 @@ public class FoodRegenerationTests
     public void ExtinctionDoesNotStopScheduleAndCeilingBoundsGrowth()
     {
         var settings = Settings(interval: 2, cap: 3, organisms: 1, drain: 1);
-        var simulation = new Simulation(settings, new WorldState(100, 80, [new Organism(0, 1, 1, 0, 1)], []));
+        var simulation = new Simulation(settings, new WorldState(100, 80, [new Organism(0, 1, 1, 0, 1, 0, 1)], []));
         for (var tick = 1; tick <= 20; tick++)
         {
             simulation.AdvanceTick();
@@ -240,13 +240,13 @@ public class FoodRegenerationTests
             Assert.Equal(tick, first.TickCount);
             Assert.Equal(first.TickCount, second.TickCount);
             Assert.Equal(first.NextFoodId, second.NextFoodId);
-            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy)).ToArray(),
-                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy)).ToArray());
+            Assert.Equal(first.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray(),
+                second.State.World.Organisms.Select(o => (o.Id, o.X, o.Y, o.HeadingRadians, o.Energy, o.Speed, o.Metabolism)).ToArray());
             Assert.Equal(first.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray(),
                 second.State.World.FoodItems.Select(f => (f.Id, f.X, f.Y, f.Energy)).ToArray());
             while (previousOrganismId < first.NextOrganismId)
             {
-                expectedRandom.NextUInt(); expectedRandom.NextUInt(); previousOrganismId++;
+                expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); expectedRandom.NextUInt(); previousOrganismId++;
             }
             Assert.Equal(previousOrganismId, second.NextOrganismId);
             Assert.InRange(first.State.World.Organisms.Count, 0, 500);

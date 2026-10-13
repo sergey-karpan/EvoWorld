@@ -175,11 +175,11 @@ double bits calculated independently in Python from Task 2 golden outputs.
 `new Simulation(settings)` owns one persistent PCG32 stream. Initialization uses
 the seeded generator and retains its stream state. `AdvanceTick()` advances
 exactly one configured timestep. Movement and survival consume zero random outputs;
-regeneration consumes two per successful spawn and reproduction two per birth. The engine is
+regeneration consumes two per successful spawn and reproduction four per birth. The engine is
 single-threaded and not thread-safe. `State` exposes an immutable `SimulationState`
 with `World` and `TickCount`; previous world and simulation snapshots remain valid.
 
-Movement uses `distance = speed * timestep`, then cosine/sine of the heading
+Movement uses `distance = organism.Speed * timestep`, then cosine/sine of the heading
 for X/Y displacement. Exact cardinal headings use exact axis components to avoid
 spurious perpendicular motion along walls. Reflection reverses the perpendicular
 direction component; headings without a net reversal are preserved exactly.
@@ -214,7 +214,7 @@ allows explicit values, including zero. Initial energies remain 100 and 20.
 
 Each tick processes organisms in ascending stable ID order:
 
-1. Subtract drain rate times configured timestep, even when stationary.
+1. Subtract individual Metabolism times configured timestep, even when stationary.
 2. Remove organisms with energy at or below zero; they neither move nor feed.
 3. Move surviving organisms from their previous positions and reflect boundaries.
 4. At the resulting position, claim at most one currently available food item
@@ -313,7 +313,7 @@ deaths open slots and lower parent IDs get first opportunity. A skipped birth
 deducts no cost, allocates no ID, and consumes no random values. Default births
 conserve energy; a smaller offspring energy loses the difference as overhead.
 
-Each successful birth uses two outputs from the same tentative PCG32 stream,
+Each successful birth uses four outputs from the same tentative PCG32 stream,
 after any food-regeneration draws. First, output / 2^32 is multiplied by 2*pi;
 cosine and sine of this angle are each multiplied by fixed radius 5 and added
 to the parent's post-movement coordinates. Negative candidates clamp to zero;
@@ -323,6 +323,8 @@ overlap is allowed. Second, output / 2^32 produces delta=(2*unit-1)*0.1 radians,
 which is added to the parent's heading and normalized using Task 4's convention.
 The parent heading is unchanged. Calculations follow this order using .NET math;
 cross-runtime bitwise equivalence is not promised.
+Third and fourth outputs determine Speed and Metabolism mutation, respectively.
+They are consumed even when mutation amplitudes are zero.
 
 The child receives exactly configured offspring energy and a monotonic ID.
 Its long allocation counter starts at the initial population; custom internal
@@ -337,11 +339,52 @@ during its creation tick. World, RNG, and both allocation counters commit throug
 the same single immutable advancement-record replacement. Failure after any
 tentative births or draws preserves every previous committed component.
 
-This is reproduction with a position and heading reference from one parent.
-Speed, metabolic drain, and pickup radius remain shared global settings.
-There is no individual genome, inherited genetic trait, mutation, or adaptive
-evolution. Per-organism traits, genetic inheritance, mutation, sexual reproduction,
-food-seeking, advanced metabolism, speciation, and persistence remain deferred.
+## Individual Traits and Mutation
+
+Each immutable organism has finite, nonnegative Speed and Metabolism. Movement
+and metabolic drain use those individual values; zero speed and zero metabolism
+are valid. The legacy entity constructor uses Speed=50 and Metabolism=1, while
+production initialization explicitly uses OrganismSpeed and
+OrganismEnergyDrainPerSecond as baseline traits. Adult replacements preserve
+their traits exactly during movement, feeding, drain, and reproduction.
+Food pickup radius remains global.
+
+The 23-argument settings constructor appends eight values: initial speed and
+metabolism variation amplitudes (both default zero), MinSpeed=0, MaxSpeed=200,
+MinMetabolism=0, MaxMetabolism=5, SpeedMutationAmplitude=1, and
+MetabolismMutationAmplitude=0.05. Bounds and amplitudes must be finite and
+nonnegative, each minimum must be below its maximum, and baselines must lie
+within explicitly supplied ranges. Earlier constructors expand upper bounds to
+include large legacy baselines instead of clamping or rejecting them.
+
+With both initial amplitudes zero, original Task 3 placement, headings, food,
+and RNG state are preserved: 3 draws per organism and 2 per food. If either
+amplitude is nonzero, complete all original placement first, then draw speed
+and metabolism variation for each organism in ID order. This consumes two extra
+draws per organism even when one amplitude is zero, without changing positions.
+
+Initial variation and mutation use unit=output/2^32, signed=2*unit-1, then
+candidate=center+signed*amplitude, clamped to inclusive configured bounds.
+Variation is bounded uniform before clamping; amplitude is not a standard
+deviation. A zero amplitude preserves the exact center when in range. Custom
+adult values outside bounds remain valid and unchanged; their offspring values
+clamp to bounds, including when amplitude is zero. Positive candidate overflow
+unambiguously clamps to the upper bound. Invalid trait construction and
+non-finite required movement or metabolic products fail the complete transaction.
+
+Children inherit the specific parent's values, then mutate only at birth.
+Food draws precede births; every birth draws position, heading, speed mutation,
+then metabolism mutation. One food and two children therefore consume ten
+outputs. Later reproduction histories differ from Task 7 because of these extra
+draws, while the PCG algorithm and homogeneous initial-world fixtures are unchanged.
+All traits, RNG, and ID counters publish together; failed ticks leak no mutations
+or random draws, and retries start from the same committed state.
+
+Heritable variation may affect survival and reproductive success, allowing
+selection to emerge. Adaptation, improvement, and population survival are not
+guaranteed. No generic genome or additional traits exist. Food sensing/seeking,
+neural networks, memory, learning, sexual reproduction, crossover, speciation,
+trait visualization, and persistence remain deferred.
 
 ## Development Status
 
@@ -355,8 +398,9 @@ simulation snapshots. Task 4.5 adds world rendering and basic playback controls.
 Task 5 adds baseline metabolism, food consumption, energy recovery, and death.
 Task 6 adds deterministic food regeneration with transactional RNG and ID history.
 Task 7 adds asexual reproduction, energy transfer, and bounded heading variation.
-Genetic inheritance, mutation, steering and food-seeking, advanced
-metabolism, evolution, persistence, and interactive configuration remain deferred.
+Task 8 adds individual Speed and Metabolism with inheritance and bounded mutation.
+Sensing and food-seeking, additional traits, persistence, and interactive
+configuration remain deferred.
 
 Task 1.5 verified native SkiaSharp loading, CPU drawing with exact pixel checks,
 and WPF `SKElement` paint callbacks before and after a programmatic resize.

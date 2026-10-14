@@ -6,6 +6,8 @@ public sealed class SimulationSettings
     private const int DefaultOrganismCount = 20;
     private const int DefaultFoodCount = 100;
     private const double DefaultOrganismSpeed = 50.0;
+    public int InitialPredatorCount { get; }
+    public double InitialPredatorEnergy { get; }
     public ulong Seed { get; }
     public double TickDurationSeconds { get; }
     public double WorldWidth { get; }
@@ -182,11 +184,45 @@ public sealed class SimulationSettings
         bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
         double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
         double neuralWeightMutationAmplitude)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight,
+            initialOrganismCount, initialFoodCount, organismSpeed, organismEnergyDrainPerSecond,
+            foodPickupRadius, foodRegenerationIntervalSeconds, maxFoodCount, reproductionEnergyThreshold,
+            reproductionEnergyCost, offspringInitialEnergy, maxOrganismCount, initialSpeedVariationAmplitude,
+            initialMetabolismVariationAmplitude, minSpeed, maxSpeed, minMetabolism,
+            maxMetabolism, speedMutationAmplitude, metabolismMutationAmplitude, organismSensingRadius,
+            organismSteeringRate, initialSensingRadiusVariationAmplitude, initialSteeringRateVariationAmplitude, minSensingRadius,
+            maxSensingRadius, minSteeringRate, maxSteeringRate, sensingRadiusMutationAmplitude,
+            steeringRateMutationAmplitude, enableNeuralControl, neuralWeightMin, neuralWeightMax,
+            initialNeuralWeightVariationAmplitude, speedModulationAmplitude, neuralWeightMutationAmplitude, 0,
+            100.0)
+    {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
+        bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
+        double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
+        double neuralWeightMutationAmplitude, int initialPredatorCount, double initialPredatorEnergy)
     {
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
         ValidatePositiveFinite(worldHeight, nameof(worldHeight));
         ArgumentOutOfRangeException.ThrowIfNegative(initialOrganismCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialPredatorCount);
+        ValidatePositiveFinite(initialPredatorEnergy, nameof(initialPredatorEnergy));
+        if ((long)initialOrganismCount + initialPredatorCount > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(initialPredatorCount), "Combined initial population exceeds the organism-ID/array-length domain.");
         ArgumentOutOfRangeException.ThrowIfNegative(initialFoodCount);
         if (!double.IsFinite(organismSpeed) || organismSpeed < 0.0)
             throw new ArgumentOutOfRangeException(nameof(organismSpeed));
@@ -246,6 +282,8 @@ public sealed class SimulationSettings
         WorldWidth = worldWidth;
         WorldHeight = worldHeight;
         InitialOrganismCount = initialOrganismCount;
+        InitialPredatorCount = initialPredatorCount;
+        InitialPredatorEnergy = initialPredatorEnergy;
         InitialFoodCount = initialFoodCount;
         OrganismSpeed = organismSpeed;
         OrganismEnergyDrainPerSecond = organismEnergyDrainPerSecond;

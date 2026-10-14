@@ -95,6 +95,8 @@ public class ExperimentSettingsTests
         [nameof(SimulationSettings.WorldWidth)] = 1000.0,
         [nameof(SimulationSettings.WorldHeight)] = 700.0,
         [nameof(SimulationSettings.InitialOrganismCount)] = 20,
+        [nameof(SimulationSettings.InitialPredatorCount)] = 0,
+        [nameof(SimulationSettings.InitialPredatorEnergy)] = 100.0,
         [nameof(SimulationSettings.InitialFoodCount)] = 100,
         [nameof(SimulationSettings.OrganismSpeed)] = 50.0,
         [nameof(SimulationSettings.OrganismEnergyDrainPerSecond)] = 1.0,

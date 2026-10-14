@@ -67,7 +67,7 @@ public sealed class Simulation
         _regenerationTicks = FoodRegenerationSchedule.Calculate(settings.FoodRegenerationIntervalSeconds, settings.TickDurationSeconds);
         var random = new Pcg32(settings.Seed);
         var state = new SimulationState(WorldInitializer.Create(settings, random), 0);
-        _advancement = new(state, random.CaptureState(), settings.InitialFoodCount, settings.InitialOrganismCount);
+        _advancement = new(state, random.CaptureState(), settings.InitialFoodCount, state.World.Organisms.Count);
         _startingOrganismCount = state.World.Organisms.Count;
         _startingNextOrganismId = _advancement.NextOrganismId;
     }
@@ -88,7 +88,7 @@ public sealed class Simulation
         var nextId = nextFoodId ?? minimumId;
         if (nextId < minimumId || nextId > int.MaxValue + 1L)
             throw new ArgumentOutOfRangeException(nameof(nextFoodId));
-        var minimumOrganismId = Math.Max((long)settings.InitialOrganismCount,
+        var minimumOrganismId = Math.Max((long)settings.InitialOrganismCount + settings.InitialPredatorCount,
             world.Organisms.Count == 0 ? 0 : (long)world.Organisms[^1].Id + 1);
         var nextOrganism = nextOrganismId ?? minimumOrganismId;
         if (nextOrganism < minimumOrganismId || nextOrganism > int.MaxValue + 1L)
@@ -177,7 +177,7 @@ public sealed class Simulation
                 consumed[selected] = true;
             }
             survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy,
-                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain));
+                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain, organism.Species));
         }
 
         var remainingFood = new List<Food>(foodItems.Count);
@@ -233,9 +233,9 @@ public sealed class Simulation
                     Settings.NeuralWeightMin, Settings.NeuralWeightMax, random)
                 : parent.Brain;
             offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
-                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, childBrain));
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, childBrain, parent.Species));
             survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
-                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain);
+                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain, parent.Species);
             nextOrganismId++;
         }
         survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.
@@ -273,7 +273,7 @@ public sealed class Simulation
     private static void ValidateStartingWorld(SimulationSettings settings, WorldState world)
     {
         if (world.WorldWidth != settings.WorldWidth || world.WorldHeight != settings.WorldHeight
-            || world.Organisms.Count > Math.Max(settings.InitialOrganismCount, settings.MaxOrganismCount)
+            || world.Organisms.Count > Math.Max((long)settings.InitialOrganismCount + settings.InitialPredatorCount, settings.MaxOrganismCount)
             || world.FoodItems.Count > Math.Max(settings.InitialFoodCount, settings.MaxFoodCount))
             throw new ArgumentException("Starting world must match dimensions and supported population limits.", nameof(world));
         for (var i = 0; i < world.Organisms.Count; i++)

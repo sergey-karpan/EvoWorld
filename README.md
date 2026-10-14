@@ -340,6 +340,59 @@ Statistics retain their existing API and inherited-trait aggregation; measured
 populations may differ because neural control and mutation change behavior.
 Learning, backpropagation, memory and neural weight statistics remain deferred.
 
+## Species Infrastructure
+
+Task 12a adds immutable `Organism.Species`: `Herbivore = 0` and `Predator = 1`.
+Legacy organism constructors use Herbivore; undefined species are rejected.
+Adult replacements preserve species and brain, and children inherit their parent's
+species exactly. Mutation never changes species.
+
+`SimulationSettings` adds `InitialPredatorCount` (default 0, nonnegative) and
+`InitialPredatorEnergy` (default 100, finite and positive), appended in that order
+by a 41-argument constructor. All prior signatures and defaults remain available.
+`InitialOrganismCount` still counts herbivores. Widened arithmetic rejects a combined
+population outside the integer ID/array-length domain; initialization checks the
+runtime array limit before allocation or random draws. Counts within that limit
+remain subject to available memory.
+
+Initialization places H herbivores, then P predators, then F food items. Herbivores
+receive IDs 0..H-1 and energy 100; predators receive IDs H..H+P-1 and configured
+energy. The shared next-organism ID starts at H+P. Placement consumes
+`3 * (H + P) + 2 * F` PCG32 outputs, X/Y/heading for each organism and X/Y for food.
+Existing coordinate mapping and half-open bounds apply to both species.
+
+Optional Speed/Metabolism and SensingRadius/SteeringRate variation phases follow,
+then neural initialization, each processing all organisms in ascending ID order.
+Each active trait group consumes two outputs per organism; active neural
+initialization consumes 74. Trait baselines, bounds and brain topology are shared.
+Births still consume six outputs, or 80 with active neural mutation; food
+regeneration still consumes two. The population ceiling counts both species,
+including when the initial population exceeds it.
+
+`PopulationStatistics` adds current `HerbivoreCount` and `PredatorCount`, whose
+sum equals `OrganismCount`. Existing trait moments and derived birth/death totals
+cover all organisms. Species counts use the same committed snapshot and zero RNG.
+
+Predators currently move, drain energy, seek/eat food, reproduce and die under the
+same rules as herbivores. Predator pursuit, attack and prey consumption belong to
+Task 12b; species-specific trait baselines remain deferred to Task 12c. Task 12a
+does not implement predator-prey dynamics.
+
+With zero predators, historical placement, traits, genomes, RNG contracts and
+behavior remain unchanged. Equivalent settings and seeds reproduce mixed worlds
+and subsequent ticks on the supported runtime. The Task 11e diagnostic API and
+`OrganismDiagnosticSample` are unchanged: samples identify organisms by ID; species
+is available from the committed world without expanding telemetry. Desktop defaults
+remain herbivore-only, and controls, inspector, trajectory and pending/active
+semantics are unchanged. Species visualization is deferred.
+
+The independent mixed initialization reference and generated fixture are stored
+under `tests/EvoWorld.Tests/Fixtures/`. Reproduce the fixture from the repository root:
+
+```powershell
+python tests/EvoWorld.Tests/Fixtures/predator_initialization_reference.py > tests/EvoWorld.Tests/Fixtures/PredatorInitializationGolden.cs
+```
+
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, fixed-step movement, survival,
@@ -729,6 +782,8 @@ Task 11d adds Desktop controller and mutation choices with explicit Reset-to-app
 configuration and reproducible successive experiments.
 Task 11e adds selected-organism inspection, a bounded sampled trajectory, and
 exact executing-tick neural telemetry published with the simulation transaction.
+Task 12a adds species identity, deterministic predator initialization, and population
+species counts while preserving the existing shared behavior.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

@@ -8,7 +8,7 @@ public static class WorldInitializer
     internal const double InitialFoodEnergy = 20.0;
 
     /// <summary>
-    /// Creates organisms first, consuming X, Y, heading per ascending ID,
+    /// Creates herbivores then predators, consuming X, Y, heading per ascending ID,
     /// then food, consuming X, Y per ascending ID. No placement retries.
     /// </summary>
     public static WorldState Create(SimulationSettings settings)
@@ -21,7 +21,10 @@ public static class WorldInitializer
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(random);
-        var organisms = new Organism[settings.InitialOrganismCount];
+        var total = (long)settings.InitialOrganismCount + settings.InitialPredatorCount;
+        if (total > Array.MaxLength)
+            throw new ArgumentOutOfRangeException(nameof(settings), "Combined initial population exceeds the supported array length.");
+        var organisms = new Organism[(int)total];
         var foodItems = new Food[settings.InitialFoodCount];
 
         for (var id = 0; id < organisms.Length; id++)
@@ -29,9 +32,11 @@ public static class WorldInitializer
             var x = NextScaled(random, settings.WorldWidth);
             var y = NextScaled(random, settings.WorldHeight);
             var heading = NextScaled(random, 2.0 * Math.PI);
-            organisms[id] = new Organism(id, x, y, heading, InitialOrganismEnergy,
+            var species = id < settings.InitialOrganismCount ? Species.Herbivore : Species.Predator;
+            var energy = species == Species.Herbivore ? InitialOrganismEnergy : settings.InitialPredatorEnergy;
+            organisms[id] = new Organism(id, x, y, heading, energy,
                 settings.OrganismSpeed, settings.OrganismEnergyDrainPerSecond,
-                settings.OrganismSensingRadius, settings.OrganismSteeringRate);
+                settings.OrganismSensingRadius, settings.OrganismSteeringRate, Organism.ZeroBrain, species);
         }
 
         for (var id = 0; id < foodItems.Length; id++)
@@ -51,7 +56,7 @@ public static class WorldInitializer
                 var metabolism = TraitVariation.Apply(organism.Metabolism, settings.InitialMetabolismVariationAmplitude,
                     settings.MinMetabolism, settings.MaxMetabolism, random.NextUInt());
                 organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
-                    organism.Energy, speed, metabolism, organism.SensingRadius, organism.SteeringRate);
+                    organism.Energy, speed, metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain, organism.Species);
             }
         }
         if (settings.InitialSensingRadiusVariationAmplitude != 0 || settings.InitialSteeringRateVariationAmplitude != 0)
@@ -64,7 +69,7 @@ public static class WorldInitializer
                 var steering = TraitVariation.Apply(organism.SteeringRate, settings.InitialSteeringRateVariationAmplitude,
                     settings.MinSteeringRate, settings.MaxSteeringRate, random.NextUInt());
                 organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
-                    organism.Energy, organism.Speed, organism.Metabolism, sensing, steering);
+                    organism.Energy, organism.Speed, organism.Metabolism, sensing, steering, organism.Brain, organism.Species);
             }
         }
         if (settings.EnableNeuralControl && settings.InitialNeuralWeightVariationAmplitude > 0)
@@ -82,7 +87,7 @@ public static class WorldInitializer
                 var organism = organisms[id];
                 organisms[id] = new Organism(id, organism.X, organism.Y, organism.HeadingRadians,
                     organism.Energy, organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate,
-                    new NeuralGenome(weights));
+                    new NeuralGenome(weights), organism.Species);
             }
         }
         return new WorldState(settings.WorldWidth, settings.WorldHeight, organisms, foodItems);

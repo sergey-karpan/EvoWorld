@@ -1,9 +1,9 @@
 namespace EvoWorld.Core;
 
-/// <summary>An immutable initial organism. Identity is its category-local ID.</summary>
+/// <summary>An immutable organism. Both species share the organism ID sequence.</summary>
 public sealed class Organism
 {
-    private static readonly NeuralGenome ZeroBrain = NeuralGenome.CreateZero();
+    internal static readonly NeuralGenome ZeroBrain = NeuralGenome.CreateZero();
     public int Id { get; }
     public double X { get; }
     public double Y { get; }
@@ -14,6 +14,7 @@ public sealed class Organism
     public double SensingRadius { get; }
     public double SteeringRate { get; }
     public NeuralGenome Brain { get; }
+    public Species Species { get; }
 
     internal Organism(int id, double x, double y, double headingRadians, double energy)
         : this(id, x, y, headingRadians, energy, 50, 1)
@@ -33,7 +34,15 @@ public sealed class Organism
 
     internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
         double sensingRadius, double steeringRate, NeuralGenome brain)
+        : this(id, x, y, headingRadians, energy, speed, metabolism, sensingRadius, steeringRate, brain, Species.Herbivore)
     {
+    }
+
+    internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
+        double sensingRadius, double steeringRate, NeuralGenome brain, Species species)
+    {
+        if (species is not Species.Herbivore and not Species.Predator)
+            throw new ArgumentOutOfRangeException(nameof(species));
         ArgumentNullException.ThrowIfNull(brain);
         if (!double.IsFinite(speed) || speed < 0) throw new ArgumentOutOfRangeException(nameof(speed));
         if (!double.IsFinite(metabolism) || metabolism < 0) throw new ArgumentOutOfRangeException(nameof(metabolism));
@@ -49,5 +58,6 @@ public sealed class Organism
         SensingRadius = sensingRadius;
         SteeringRate = steeringRate;
         Brain = brain;
+        Species = species;
     }
 }

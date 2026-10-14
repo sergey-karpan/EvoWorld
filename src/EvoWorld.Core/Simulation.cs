@@ -5,7 +5,41 @@ namespace EvoWorld.Core;
 /// <summary>A single-threaded fixed-step simulation. Not thread-safe.</summary>
 public sealed class Simulation
 {
-    private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId, long NextOrganismId);
+    private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId, long NextOrganismId,
+        OrganismDiagnosticSample? DiagnosticSample)
+    {
+        // Retain the historical four-argument shape used by transaction regression probes.
+        public Advancement(SimulationState state, Pcg32State random, long nextFoodId, long nextOrganismId)
+            : this(state, random, nextFoodId, nextOrganismId, null) { }
+    }
+    private int _trackedOrganismId = -1;
+    /// <summary>The configured diagnostic observer, or null when disabled.</summary>
+    public int? DiagnosticOrganismId => _trackedOrganismId >= 0 ? _trackedOrganismId : null;
+    // Observer configuration is independent of the committed world. Configuration changes
+    // suppress the preceding sample until the next successful tick publishes a matching one.
+    private long _diagnosticsEnabledAtTick;
+    public OrganismDiagnosticSample? LastDiagnosticSample
+    {
+        get
+        {
+            var sample = _advancement.DiagnosticSample;
+            return sample is not null && sample.OrganismId == _trackedOrganismId
+                && sample.TickCount > _diagnosticsEnabledAtTick ? sample : null;
+        }
+    }
+
+    public void EnableDiagnosticsFor(int organismId)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(organismId);
+        if (_trackedOrganismId == organismId) return;
+        _trackedOrganismId = organismId;
+        _diagnosticsEnabledAtTick = TickCount;
+    }
+
+    public void DisableDiagnostics()
+    {
+        _trackedOrganismId = -1;
+    }
     internal const double OffspringPositionOffsetRadius = 5.0;
     internal const double OffspringHeadingOffsetMaxRadians = 0.1;
     private Advancement _advancement;
@@ -93,6 +127,7 @@ public sealed class Simulation
         var previousAdvancement = _advancement;
         var previous = previousAdvancement.State;
         var nextTick = checked(previous.TickCount + 1);
+        OrganismDiagnosticSample? diagnosticSample = null;
 
         var survivors = new List<Organism>(previous.World.Organisms.Count);
         var foodItems = previous.World.FoodItems;
@@ -108,9 +143,17 @@ public sealed class Simulation
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
-            var (heading, effectiveSpeed) = Settings.EnableNeuralControl
-                ? NeuralControl.Evaluate(organism, energy, foodItems, consumed, Settings)
-                : (FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds), organism.Speed);
+            double heading, effectiveSpeed;
+            if (Settings.EnableNeuralControl)
+                (heading, effectiveSpeed) = NeuralControl.Evaluate(organism, energy, foodItems, consumed,
+                    Settings, _trackedOrganismId, nextTick, ref diagnosticSample);
+            else
+            {
+                heading = FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds);
+                effectiveSpeed = organism.Speed;
+                if (organism.Id == _trackedOrganismId)
+                    diagnosticSample = new(organism.Id, nextTick, true, false);
+            }
             if (FailSteeringForOrganismIdForTesting == organism.Id)
                 throw new InvalidOperationException("Injected steering failure.");
             var distance = effectiveSpeed * Settings.TickDurationSeconds;
@@ -200,7 +243,9 @@ public sealed class Simulation
         var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight,
             FailWorldConstructionForTesting ? null! : survivors, remainingFood);
         var next = new SimulationState(world, nextTick);
-        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId);
+        if (_trackedOrganismId >= 0 && diagnosticSample is null)
+            diagnosticSample = new(_trackedOrganismId, nextTick, false, Settings.EnableNeuralControl);
+        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId, diagnosticSample);
         _advancement = advancement; // Sole commit: state, stream position, and ID history.
     }
 

@@ -9,6 +9,7 @@ internal sealed class DesktopExperiment
     private sealed record ActiveRun(Simulation Simulation, ExperimentOptions Options);
     private readonly Func<SimulationSettings, Simulation> _createSimulation;
     private ActiveRun _active;
+    internal OrganismInspection Inspection { get; } = new();
 
     internal Simulation Simulation => _active.Simulation;
     internal ExperimentOptions ActiveOptions => _active.Options;
@@ -33,7 +34,14 @@ internal sealed class DesktopExperiment
     {
         var selected = PendingOptions;
         var replacement = Construct(selected);
+        Inspection.Clear(_active.Simulation);
         _active = replacement; // Publish only after complete successful construction, even when selections match.
+    }
+
+    internal void AdvanceTick()
+    {
+        Simulation.AdvanceTick();
+        Inspection.Observe(Simulation); // Only after successful publication; never during paint.
     }
 
     private ActiveRun Construct(ExperimentOptions selected)

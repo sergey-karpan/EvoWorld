@@ -132,6 +132,43 @@ Simulation or drawing errors stop playback and show a single inline error state.
 Reset permits recovery; deterministic failures are not automatically retried.
 Task 4.5 adds visualization and playback, without changing simulation behavior.
 
+### Inspect an organism
+
+Click an organism to inspect; click empty space to clear. The gold selection ring
+and translucent gold trajectory are identified by the inspector legend. Selection
+uses the nearest visible symbol, with smallest-ID ties, and follows that ID across
+immutable snapshots. The compact panel collapses when selection is cleared.
+
+The inspector shows alive/deceased state, tick, position, energy, inherited Speed,
+Metabolism, SensingRadius, SteeringRate, heading, controller, and trail sample count.
+The FIFO trail holds up to 500 committed positions, beginning at selection time,
+then appending once per successful tick. Painting, pausing and resizing add no
+points. Lines connect sampled committed positions, not continuous movement;
+reflections can produce straight segments crossing the world edge. Selecting a
+newborn after birth starts at its current committed position without reconstructing
+its earlier history.
+
+Neural outputs and commanded rotation (rad/tick) and effective speed (world units/s)
+come from the executing tick, after energy drain and before movement, feeding and
+reflection. Inherited Speed is a separate trait. Final reflected heading and sampled
+displacement are not command proxies. Every command includes its producing tick;
+rule-based commands display N/A (Rule-based controller). Other unavailable values
+identify diagnostics disabled, no sample yet, did not act this tick, or organism not
+found. Core commits null commands for absent, newborn or pre-movement deaths,
+without reusing old output values. Diagnostics consume no RNG or extra forward pass.
+
+Death freezes the trace and retains the historical last observed alive state,
+including its timestamp and known energy; this is not energy measured at death.
+The inspector says deceased and separately labels any last acted sample with its
+original tick. Latest Core samples continue to report that the organism did not act.
+Successful Reset clears selection, diagnostics and history. Failed Reset preserves
+them, while pending controller choices leave the active inspection unchanged.
+Pause/resume, trait coloring and resize preserve selection.
+
+A brain is fixed during an organism's lifetime; weight mutation applies only to
+offspring. A repeated circular path can result from stable controller outputs
+rather than learning. Observed adaptation and population survival are not guaranteed.
+
 ## Population Statistics
 
 Task 10 makes evolutionary dynamics observable without producing new behavior.
@@ -171,7 +208,7 @@ These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
 correlations, lineage and generational statistics, neural weight statistics, predators and
-visualization beyond simple coloring remain deferred. Measurement does not itself
+advanced visualization remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
 ## Optional Neural Control
@@ -690,6 +727,8 @@ initial weights, and exact brain inheritance. Task 11c adds optional determinist
 neural weight mutation at birth with overflow-safe clamping and transactional RNG.
 Task 11d adds Desktop controller and mutation choices with explicit Reset-to-apply
 configuration and reproducible successive experiments.
+Task 11e adds selected-organism inspection, a bounded sampled trajectory, and
+exact executing-tick neural telemetry published with the simulation transaction.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

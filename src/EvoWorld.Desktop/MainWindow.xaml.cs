@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Globalization;
 using System.Windows.Threading;
+using System.Windows.Input;
 using EvoWorld.Core;
 using SkiaSharp.Views.Desktop;
 
@@ -16,6 +17,8 @@ public partial class MainWindow : Window
     private bool _failed;
     private bool _closed;
     private string _playbackStatus = "Ready";
+    private int _canvasWidth;
+    private int _canvasHeight;
 
     public MainWindow() : this(new DesktopExperiment())
     {
@@ -68,7 +71,7 @@ public partial class MainWindow : Window
         if (_closed || _failed || !_timer.IsEnabled) return;
         try
         {
-            ActiveSimulation.AdvanceTick(); // One fixed step, no catch-up.
+            _experiment.AdvanceTick(); // One fixed step, no catch-up.
             UpdateReadout();
             Viewport.InvalidateVisual();
         }
@@ -81,13 +84,34 @@ public partial class MainWindow : Window
         try
         {
             var statistics = ActiveSimulation.GetStatistics(out var snapshot);
-            var rendered = _renderer.Draw(e.Surface.Canvas, e.Info.Width, e.Info.Height, snapshot.World, statistics, SelectedTrait);
+            _canvasWidth = e.Info.Width;
+            _canvasHeight = e.Info.Height;
+            var rendered = _renderer.Draw(e.Surface.Canvas, e.Info.Width, e.Info.Height, snapshot.World, statistics, SelectedTrait, _experiment.Inspection);
             StatusText.Text = rendered ? _playbackStatus : "World cannot be displayed at this viewport scale.";
         }
         catch (Exception exception) { ShowError("Drawing stopped", exception); }
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e) => Viewport.InvalidateVisual();
+
+    private void WorldArea_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Bound the inspector by the space remaining below the toolbar, preserving
+        // a visible canvas even at the minimum window size. Long history scrolls.
+        InspectorScroll.MaxHeight = Math.Max(24, Math.Min(185, e.NewSize.Height * 0.45 - 16));
+    }
+
+    private void Viewport_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_closed || _failed || Viewport.ActualWidth <= 0 || Viewport.ActualHeight <= 0) return;
+        var position = e.GetPosition(Viewport);
+        var snapshot = ActiveSimulation.State;
+        var id = OrganismHitTesting.Find(snapshot.World, _canvasWidth, _canvasHeight, position.X, position.Y,
+            _canvasWidth / Viewport.ActualWidth, _canvasHeight / Viewport.ActualHeight);
+        _experiment.Inspection.Select(ActiveSimulation, id);
+        UpdateReadout();
+        Viewport.InvalidateVisual();
+    }
 
     private void ExperimentSelection_Changed(object sender, SelectionChangedEventArgs e)
     {
@@ -144,6 +168,8 @@ public partial class MainWindow : Window
         var label = trait is ColorTrait.None or ColorTrait.Energy ? "Speed" : trait.ToString();
         StatisticsText.Text = string.Create(CultureInfo.InvariantCulture,
             $"{label}: {moments.Mean:G4} ± {moments.StandardDeviation:G4} | Births: {statistics.TotalBirths} | Deaths: {statistics.TotalDeaths}");
+        InspectorPanel.Visibility = _experiment.Inspection.SelectedId is null ? Visibility.Collapsed : Visibility.Visible;
+        InspectorText.Text = _experiment.Inspection.Format(ActiveSimulation);
     }
 
     private void ShowError(string context, Exception exception)

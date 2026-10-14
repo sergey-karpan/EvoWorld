@@ -6,6 +6,14 @@ internal static class NeuralControl
     internal static (double Heading, double EffectiveSpeed) Evaluate(Organism organism, double energy,
         IReadOnlyList<Food> food, bool[] consumed, SimulationSettings settings)
     {
+        OrganismDiagnosticSample? ignored = null;
+        return Evaluate(organism, energy, food, consumed, settings, -1, 0, ref ignored);
+    }
+
+    internal static (double Heading, double EffectiveSpeed) Evaluate(Organism organism, double energy,
+        IReadOnlyList<Food> food, bool[] consumed, SimulationSettings settings,
+        int trackedOrganismId, long tickCount, ref OrganismDiagnosticSample? diagnosticSample)
+    {
         Span<double> inputs = stackalloc double[NeuralGenome.InputCount];
         Span<double> outputs = stackalloc double[NeuralGenome.OutputCount];
         EncodeInputs(organism, energy, food, consumed, settings, inputs);
@@ -23,6 +31,9 @@ internal static class NeuralControl
             ? Math.PI : Math.Min(organism.SteeringRate * duration, Math.PI);
         var rotation = outputs[0] * limit;
         var heading = rotation == 0 ? organism.HeadingRadians : FoodSeeking.Normalize(organism.HeadingRadians + rotation);
+        if (organism.Id == trackedOrganismId)
+            diagnosticSample = new(organism.Id, tickCount, true, true,
+                outputs[0], outputs[1], rotation, effectiveSpeed);
         return (heading, effectiveSpeed);
     }
 

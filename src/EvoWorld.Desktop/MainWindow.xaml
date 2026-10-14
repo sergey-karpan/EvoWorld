@@ -23,9 +23,20 @@
             <TextBlock x:Name="TickText" Text="Tick: 0" Foreground="White" VerticalAlignment="Center" />
             <ComboBox x:Name="TraitSelector" Width="130" Margin="12,0,0,0" VerticalAlignment="Center"
                       ToolTip="Organism color trait" SelectionChanged="TraitSelector_SelectionChanged" />
-            <TextBlock x:Name="StatisticsText" Foreground="#C4CFDC" Margin="12,0,0,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="StatisticsText" Foreground="#C4CFDC" Margin="12,0,0,0" VerticalAlignment="Center" MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
         </WrapPanel>
         <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Text="Ready" Foreground="#C4CFDC" Margin="12,8" TextWrapping="Wrap" />
-        <skia:SKElement x:Name="Viewport" PaintSurface="Viewport_PaintSurface" SizeChanged="Viewport_SizeChanged" />
+        <TextBlock DockPanel.Dock="Bottom" Text="Click an organism to inspect; click empty space to clear" Foreground="#C4CFDC" Margin="12,4" TextWrapping="Wrap" />
+        <DockPanel x:Name="WorldArea" SizeChanged="WorldArea_SizeChanged">
+            <Border x:Name="InspectorPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Background="#202B38" Margin="12,4" Padding="8">
+                <ScrollViewer x:Name="InspectorScroll" MaxHeight="185" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="Gold ring: selected organism · Translucent gold line: sampled trajectory" Foreground="#FFD166" TextWrapping="Wrap" />
+                        <TextBlock x:Name="InspectorText" Foreground="#DEF7FF" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+            <skia:SKElement x:Name="Viewport" PaintSurface="Viewport_PaintSurface" SizeChanged="Viewport_SizeChanged" MouseLeftButtonDown="Viewport_MouseLeftButtonDown" />
+        </DockPanel>
     </DockPanel>
 </Window>

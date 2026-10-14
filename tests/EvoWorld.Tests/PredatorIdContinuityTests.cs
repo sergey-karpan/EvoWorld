@@ -27,7 +27,7 @@ public sealed class PredatorIdContinuityTests
     [InlineData(true, 0.125, 80)]
     public void MixedParentsInheritTheirOwnSpeciesAndBrainWithUnchangedBirthDraws(bool neural, double mutation, int draws)
     {
-        var settings = PredatorFixture.Settings(neural: neural, mutation: mutation, food: 0, foodCap: 0);
+        var settings = PredatorFixture.Settings(neural: neural, mutation: mutation, food: 0, foodCap: 0, pickup: 0);
         var a = PredatorFixture.Organism(Species.Herbivore, id: 7, brain: NeuralFixture.Brain(0.3));
         var b = PredatorFixture.Organism(Species.Predator, id: 43, brain: NeuralFixture.Brain(-0.4));
         var simulation = PredatorFixture.Create(settings, a, b);

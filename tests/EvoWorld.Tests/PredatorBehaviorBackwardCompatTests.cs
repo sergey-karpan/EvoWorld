@@ -70,7 +70,7 @@ public sealed class PredatorBehaviorBackwardCompatTests
     public void DiagnosticPublicShapeAndLifetimeAreUnchangedForPredators()
     {
         string[] expected = ["OrganismId", "TickCount", "DidAct", "IsNeuralMode", "IsRuleBasedMode",
-            "NeuralOutputSteering", "NeuralOutputSpeed", "AppliedRotationRadians", "EffectiveSpeed", "TargetKind"];
+            "NeuralOutputSteering", "NeuralOutputSpeed", "AppliedRotationRadians", "EffectiveSpeed", "TargetKind", "PreyConsumedId", "EnergyGainedFromPrey"];
         Assert.Equal(expected.Order(), typeof(OrganismDiagnosticSample).GetProperties().Select(p => p.Name).Order());
         var simulation = PredatorFixture.Create(PredatorFixture.Settings(neural: true, food: 0, foodCap: 0, duration: 1),
             PredatorFixture.Organism(Species.Predator, id: 43, energy: 1.5, metabolism: 1));

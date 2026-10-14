@@ -97,6 +97,7 @@ public class ExperimentSettingsTests
         [nameof(SimulationSettings.InitialOrganismCount)] = 20,
         [nameof(SimulationSettings.InitialPredatorCount)] = 0,
         [nameof(SimulationSettings.InitialPredatorEnergy)] = 100.0,
+        [nameof(SimulationSettings.PredationEnergyTransferRatio)] = 0.8,
         [nameof(SimulationSettings.InitialFoodCount)] = 100,
         [nameof(SimulationSettings.OrganismSpeed)] = 50.0,
         [nameof(SimulationSettings.OrganismEnergyDrainPerSecond)] = 1.0,

@@ -14,7 +14,7 @@ public sealed class PredatorPursuitTests
     {
         var predator = PursuitFixture.Organism(speed: 2, steering: 0.5);
         var prey = PursuitFixture.Organism(Species.Herbivore, id: 43, x: x, y: y);
-        var simulation = PursuitFixture.Create([predator, prey]); simulation.EnableDiagnosticsFor(7);
+        var simulation = PursuitFixture.Create([predator, prey], pickup: 0); simulation.EnableDiagnosticsFor(7);
         simulation.AdvanceTick(); var current = simulation.State.World.Organisms[0];
         Assert.Equal(expectedHeading, current.HeadingRadians);
         Assert.Equal(50 + 2 * Math.Cos(expectedHeading), current.X);
@@ -83,7 +83,7 @@ public sealed class PredatorPursuitTests
     {
         var parent = PursuitFixture.Organism(Species.Herbivore, id: 7, x: 90, speed: 40, heading: Math.PI, energy: 160);
         var predator = PursuitFixture.Organism(id: 43, sensing: 10);
-        var simulation = PursuitFixture.Create([parent, predator], cap: 4);
+        var simulation = PursuitFixture.Create([parent, predator], cap: 4, pickup: 0);
         simulation.EnableDiagnosticsFor(43); simulation.AdvanceTick();
         Assert.Contains(simulation.State.World.Organisms, o => o.Id == 44);
         Assert.Equal(50, simulation.State.World.Organisms[0].X);
@@ -98,7 +98,7 @@ public sealed class PredatorPursuitTests
     {
         var predator = PursuitFixture.Organism(heading: 0.25);
         var prey = PursuitFixture.Organism(Species.Herbivore, id: 43, energy: 75);
-        var simulation = PursuitFixture.Create([predator, prey], neural: neural);
+        var simulation = PursuitFixture.Create([predator, prey], neural: neural, pickup: 0);
         simulation.EnableDiagnosticsFor(7); simulation.AdvanceTick();
         Assert.Equal(2, simulation.State.World.Organisms.Count);
         Assert.Equal(100, simulation.State.World.Organisms[0].Energy); Assert.Equal(75, simulation.State.World.Organisms[1].Energy);

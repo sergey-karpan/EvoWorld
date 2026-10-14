@@ -10,16 +10,21 @@ public readonly record struct PopulationStatistics
     public int FoodCount { get; }
     public long TotalBirths { get; }
     public long TotalDeaths { get; }
+    public long TotalPredationEvents { get; }
     public TraitStatistics Speed { get; }
     public TraitStatistics Metabolism { get; }
     public TraitStatistics SensingRadius { get; }
     public TraitStatistics SteeringRate { get; }
 
     internal PopulationStatistics(SimulationState state, long births, long deaths)
+        : this(state, births, deaths, 0) { }
+
+    internal PopulationStatistics(SimulationState state, long births, long deaths, long predationEvents)
     {
         TickCount = state.TickCount;
         OrganismCount = state.World.Organisms.Count; FoodCount = state.World.FoodItems.Count;
         TotalBirths = births; TotalDeaths = deaths;
+        TotalPredationEvents = predationEvents;
         var organisms = state.World.Organisms;
         var herbivores = 0;
         var predators = 0;

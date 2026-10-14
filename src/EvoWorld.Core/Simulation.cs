@@ -6,7 +6,7 @@ namespace EvoWorld.Core;
 public sealed class Simulation
 {
     private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId, long NextOrganismId,
-        OrganismDiagnosticSample? DiagnosticSample)
+        OrganismDiagnosticSample? DiagnosticSample, long TotalPredationEvents = 0)
     {
         // Retain the historical four-argument shape used by transaction regression probes.
         public Advancement(SimulationState state, Pcg32State random, long nextFoodId, long nextOrganismId)
@@ -78,10 +78,16 @@ public sealed class Simulation
     // optional for testing previously allocated IDs no longer present in the world.
     internal Simulation(SimulationSettings settings, WorldState world, long tickCount = 0,
         long? nextFoodId = null, long? nextOrganismId = null)
+        : this(settings, world, tickCount, nextFoodId, nextOrganismId, 0) { }
+
+    // Internal-only history injection enables checked counter-boundary tests.
+    internal Simulation(SimulationSettings settings, WorldState world, long tickCount,
+        long? nextFoodId, long? nextOrganismId, long totalPredationEvents)
         : this(settings)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentOutOfRangeException.ThrowIfNegative(tickCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(totalPredationEvents);
         ValidateStartingWorld(settings, world);
         var minimumId = Math.Max((long)settings.InitialFoodCount,
             world.FoodItems.Count == 0 ? 0 : (long)world.FoodItems[^1].Id + 1);
@@ -93,7 +99,7 @@ public sealed class Simulation
         var nextOrganism = nextOrganismId ?? minimumOrganismId;
         if (nextOrganism < minimumOrganismId || nextOrganism > int.MaxValue + 1L)
             throw new ArgumentOutOfRangeException(nameof(nextOrganismId));
-        _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId, nextOrganism);
+        _advancement = new(new SimulationState(world, tickCount), _advancement.Random, nextId, nextOrganism, null, totalPredationEvents);
         _startingOrganismCount = world.Organisms.Count;
         _startingNextOrganismId = nextOrganism;
     }
@@ -119,7 +125,7 @@ public sealed class Simulation
         }
         if (births < 0 || deaths < 0)
             throw new InvalidOperationException("Population history cannot contain negative births or deaths.");
-        return new PopulationStatistics(snapshot, births, deaths);
+        return new PopulationStatistics(snapshot, births, deaths, advancement.TotalPredationEvents);
     }
 
     public void AdvanceTick()
@@ -133,8 +139,12 @@ public sealed class Simulation
         var foodItems = previous.World.FoodItems;
         var consumed = new bool[foodItems.Count];
         var radius = FoodDistance.FromLength(Settings.FoodPickupRadius);
+        // Snapshot indices, not entity IDs: custom worlds may have sparse/high IDs.
+        var captured = new bool[previous.World.Organisms.Count];
+        var predationEvents = previousAdvancement.TotalPredationEvents;
         for (var index = 0; index < previous.World.Organisms.Count; index++)
         {
+            if (captured[index]) continue; // No action, drain, or commands after capture.
             var organism = previous.World.Organisms[index];
             var energyCost = organism.Metabolism * Settings.TickDurationSeconds;
             if (!double.IsFinite(energyCost)) throw new OverflowException("Energy cost must be finite.");
@@ -177,6 +187,33 @@ public sealed class Simulation
                 if (!double.IsFinite(energy))
                     throw new OverflowException("Organism energy after feeding must be finite.");
                 consumed[selected] = true;
+            }
+            if (organism.Species == Species.Predator && Settings.FoodPickupRadius > 0)
+            {
+                var preyIndex = FindAttackPrey(index, x.Position, y.Position, radius,
+                    previous.World.Organisms, survivors, captured);
+                if (preyIndex >= 0)
+                {
+                    var prey = previous.World.Organisms[preyIndex];
+                    var gain = Settings.PredationEnergyTransferRatio * prey.Energy;
+                    var fedEnergy = energy + gain;
+                    if (!double.IsFinite(gain) || gain < 0 || !double.IsFinite(fedEnergy) || fedEnergy < 0)
+                        throw new OverflowException("Predation energy must be finite and nonnegative.");
+                    predationEvents = checked(predationEvents + 1);
+                    energy = fedEnergy;
+                    captured[preyIndex] = true;
+                    if (preyIndex < index)
+                        survivors.RemoveAt(FindSurvivor(survivors, prey.Id));
+                    if (organism.Id == _trackedOrganismId)
+                    {
+                        // Keep the already executing neural commands; never run a second forward pass.
+                        var commands = diagnosticSample!;
+                        diagnosticSample = new(organism.Id, nextTick, true, Settings.EnableNeuralControl,
+                            commands.NeuralOutputSteering ?? 0, commands.NeuralOutputSpeed ?? 0,
+                            commands.AppliedRotationRadians ?? 0, commands.EffectiveSpeed ?? 0,
+                            commands.TargetKind, prey.Id, gain);
+                    }
+                }
             }
             survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy,
                 organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain, organism.Species));
@@ -247,8 +284,60 @@ public sealed class Simulation
         var next = new SimulationState(world, nextTick);
         if (_trackedOrganismId >= 0 && diagnosticSample is null)
             diagnosticSample = new(_trackedOrganismId, nextTick, false, Settings.EnableNeuralControl);
-        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId, diagnosticSample);
-        _advancement = advancement; // Sole commit: state, stream position, and ID history.
+        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId, diagnosticSample, predationEvents);
+        _advancement = advancement; // Sole commit: world, RNG, IDs, diagnostics, and predation history.
+    }
+
+    private int FindAttackPrey(int attackerIndex, double x, double y, FoodDistance radius,
+        IReadOnlyList<Organism> previous, List<Organism> survivors, bool[] captured)
+    {
+        var selected = -1;
+        FoodDistance closest = default;
+        for (var index = 0; index < previous.Count; index++)
+        {
+            var prey = previous[index];
+            if (prey.Species != Species.Herbivore || captured[index]) continue;
+            var current = prey;
+            if (index < attackerIndex)
+            {
+                var survivorIndex = FindSurvivor(survivors, prey.Id);
+                if (survivorIndex < 0) continue; // Already died from actual drain.
+                current = survivors[survivorIndex];
+            }
+            else
+            {
+                // Exact ordinary drain arithmetic, without acting or changing the prey.
+                var cost = prey.Metabolism * Settings.TickDurationSeconds;
+                if (!double.IsFinite(cost)) throw new OverflowException("Energy cost must be finite.");
+                var remaining = prey.Energy - cost;
+                if (!double.IsFinite(remaining)) throw new OverflowException("Organism energy after drain must be finite.");
+                if (remaining <= 0) continue;
+            }
+            var distance = FoodDistance.Between(x, y, current.X, current.Y);
+            if (distance.CompareTo(radius) > 0) continue;
+            if (selected < 0 || distance.CompareTo(closest) < 0
+                || distance.CompareTo(closest) == 0 && prey.Id < previous[selected].Id)
+            {
+                selected = index;
+                closest = distance;
+            }
+        }
+        return selected;
+    }
+
+    private static int FindSurvivor(List<Organism> survivors, int id)
+    {
+        var low = 0;
+        var high = survivors.Count - 1;
+        while (low <= high)
+        {
+            var middle = low + (high - low) / 2;
+            var found = survivors[middle].Id;
+            if (found == id) return middle;
+            if (found < id) low = middle + 1;
+            else high = middle - 1;
+        }
+        return -1;
     }
 
     private static (double Cosine, double Sine) Direction(double heading)

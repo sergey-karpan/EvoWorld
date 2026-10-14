@@ -174,7 +174,7 @@ rather than learning. Observed adaptation and population survival are not guaran
 Task 10 makes evolutionary dynamics observable without producing new behavior.
 `Simulation.GetStatistics()` returns an immutable `PopulationStatistics` value:
 committed `TickCount`, current `OrganismCount` and `FoodCount`, `TotalBirths` and
-`TotalDeaths`, plus `TraitStatistics` for Speed, Metabolism, SensingRadius and
+`TotalDeaths`, cumulative `TotalPredationEvents` (Task 12b2), plus `TraitStatistics` for Speed, Metabolism, SensingRadius and
 SteeringRate. Each trait contains `Min`, `Max`, `Mean`, population
 `StandardDeviation` (denominator `Count`) and `Count`. An empty population has
 exact zero values in every trait field; identical values have exact zero deviation.
@@ -193,7 +193,7 @@ by the range, then compensated squared deviations in that scaled space. Scaling
 back only at the end avoids overflowing sums and squares, including near
 `double.MaxValue`, and retains small spreads near large values. Computation is
 O(n), with constant temporary storage and no per-organism allocations, sorting,
-cache or tick-pipeline tracking. Like advancement, reading is single-threaded and
+cache or trait tracking in the tick pipeline. Like advancement, reading is single-threaded and
 supported between completed ticks, with no concurrent advancement guarantee.
 `GetStatistics(out SimulationState snapshot)` also returns the exact snapshot
 used, allowing rendering to pair world and observations consistently.
@@ -207,7 +207,7 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, neural weight statistics, attack/consumption statistics and
+correlations, lineage and generational statistics, neural weight statistics, detailed predation statistics and
 advanced visualization remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
@@ -377,13 +377,13 @@ cover all organisms. Species counts use the same committed snapshot and zero RNG
 
 Task 12a initially gave both species the same behavior. Task 12b1 now makes
 predators pursue herbivores and skip food pickup; drain, movement, reproduction
-and death retain their shared rules. Attack and prey consumption remain deferred
-to Task 12b2, and species-specific trait baselines to Task 12c.
+and death retain their shared rules. Task 12b2 adds attack and prey consumption;
+species-specific trait baselines remain deferred to Task 12c.
 
 With zero predators, historical placement, traits, genomes, RNG contracts and
 behavior remain unchanged. Equivalent settings and seeds reproduce mixed worlds
 and subsequent ticks on the supported runtime. Observer configuration and diagnostic
-publication remain unchanged; Task 12b1 adds only the sensed `TargetKind` to
+publication remain atomic; Task 12b1 adds the sensed `TargetKind` to
 `OrganismDiagnosticSample`. Species is still resolved from the world. Desktop defaults
 remain herbivore-only, and controls, inspector, trajectory and pending/active
 semantics are unchanged. Species visualization is deferred.
@@ -437,8 +437,8 @@ The sample commits with world, RNG and IDs; failure preserves the previous sampl
 Target selection, pursuit and telemetry add zero RNG draws or extra forward passes.
 Initialization, regeneration and birth draw contracts are unchanged. Zero-predator
 worlds preserve historical herbivore behavior and goldens; identical mixed runs
-remain reproducible on the supported runtime. Predators may starve while chasing:
-there is no attack, prey consumption, damage or energy transfer yet. Prey evasion,
+remain reproducible on the supported runtime. Task 12b1 introduced pursuit alone;
+Task 12b2 adds contact consumption as described below. Prey evasion,
 species-specific traits and further ecological behavior remain deferred.
 
 Desktop and its inspector are unchanged; TargetKind is available through Core
@@ -447,10 +447,62 @@ telemetry. Independent scalar input/output and herbivore regression oracles are 
 `tests/EvoWorld.Tests/Fixtures/HerbivorePursuitReference.cs`; no external tooling is
 needed to reproduce these calculations.
 
+## Attack and Consumption
+
+Task 12b2 lets surviving predators consume at most one eligible herbivore after
+their movement and reflection, in ascending stable organism ID order. Attack
+range reuses `FoodPickupRadius`, including its boundary. Zero disables attacks
+even at exact overlap; herbivore zero-radius food pickup is unchanged. Attacks
+are independent of sensing radius and target, and work in both controller modes.
+
+Candidates must exist in the previous committed snapshot and survive this tick's
+metabolic drain. Lower-ID prey use their actual post-movement/feeding survivor
+position; higher-ID prey use their previous position and a non-mutating check of
+`Energy - Metabolism * TickDurationSeconds`. Non-finite required arithmetic fails
+the tick. The nearest eligible prey wins, with smallest-ID distance ties using
+the existing scaled `FoodDistance` comparisons.
+
+Capture immediately excludes prey from further attacks and final survivors.
+Higher-ID captured prey skip their entire action; lower-ID prey keep already
+completed actions, including food consumption, but cannot reproduce. Nothing
+rewinds. Multiple predators cannot consume the same prey: the first processing
+ID wins. Newborns cannot be attacked until the following tick. Sensing continues
+to read the previous snapshot, including prey already captured in this tick.
+
+The immutable `PredationEnergyTransferRatio` defaults to 0.8 and must be finite
+in [0,1]. A new 42-argument constructor appends it; all historical signatures and
+defaults remain available. Gain is `ratio * prey.Energy`, strictly using the
+prey's committed energy before this tick's drain or feeding. Thus gross gain is
+independent of prey processing order; the model is not strict energy conservation.
+Ratio zero still captures prey and records zero gain. Non-finite gain or final
+predator energy throws `OverflowException` before publication.
+
+Executing-tick diagnostics add nullable `PreyConsumedId` and
+`EnergyGainedFromPrey`, populated after successful attacks in either controller
+mode, while retaining the original neural commands and sensed `TargetKind`.
+No attack means null outcomes. A tracked prey captured before acting reports
+DidAct=false; one captured after acting retains its own same-tick commands.
+The inspector determines death from the committed world and freezes its history.
+Attack outcomes are exposed through Core; Desktop controls and rendering are unchanged.
+
+`TotalPredationEvents` is a checked cumulative long counter, incremented once per
+capture and retained after extinction. `TotalDeaths` still counts each disappearance
+once. The counter, diagnostics, world, RNG and entity IDs publish atomically through
+one advancement replacement; any failure preserves all previous components.
+Attacks add zero RNG draws or extra neural evaluations. Regeneration still precedes
+reproduction, whose draw contracts are unchanged, although mixed-world birth
+histories can change. Zero-predator behavior and historical goldens are preserved;
+equivalent runs reproduce on the supported runtime. Independent energy expectations
+are scalar calculations in `PredatorEnergyTransferTests.cs`, without external tooling.
+
+Species-specific traits, a separate `PredatorAttackRadius`, prey evasion,
+cooperative hunting and ecological tuning remain deferred. This is contact
+consumption, not a claim of full predator-prey dynamics or ecological coexistence.
+
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, fixed-step movement, survival,
-food regeneration, reproduction, trait mutation, reactive food seeking, and
+food regeneration, reproduction, trait mutation, reactive food seeking, prey pursuit and consumption, and
 population statistics and optional neural control are implemented. Desktop
 provides dispatcher playback and trait coloring. Further ecosystem behavior remains planned.
 
@@ -570,7 +622,8 @@ allows explicit values, including zero. Herbivore and food initial energies rema
 
 Each tick processes organisms in ascending stable ID order:
 
-1. Subtract individual Metabolism times configured timestep, even when stationary.
+1. Skip prey captured by earlier predators; otherwise subtract individual Metabolism
+   times configured timestep, even when stationary.
 2. Remove organisms with energy at or below zero; they neither move nor feed.
 3. Resolve the species-specific target, steer, move survivors from previous positions,
    and reflect boundaries. Predators sense herbivores from the previous snapshot.
@@ -578,7 +631,7 @@ Each tick processes organisms in ascending stable ID order:
    within the inclusive pickup radius: nearest distance, then smallest food ID
    when computed distances are exactly equal.
 5. Add any claimed food's energy without an energy cap and create a replacement organism.
-   Predators skip pickup entirely.
+   Predators skip food pickup and instead resolve contact consumption as described above.
 6. Build surviving-organism and unconsumed-food collections, regenerate food, reproduce, then publish one
    complete immutable snapshot with the incremented tick count.
 
@@ -810,7 +863,7 @@ births consume zero, and food regeneration still consumes two per successful spa
 
 Food seeking is reactive: there is no stored target, memory, route planning, or
 learning. Selection may affect sensory traits over generations, without guaranteed
-adaptation. Multiple sensors, attacks and prey consumption, obstacle avoidance, flocking,
+adaptation. Multiple sensors, obstacle avoidance, flocking,
 pathfinding, learning, sexual reproduction, advanced visualization, and persistence
 remain deferred.
 
@@ -842,7 +895,9 @@ exact executing-tick neural telemetry published with the simulation transaction.
 Task 12a adds species identity, deterministic predator initialization, and population
 species counts while preserving the existing shared behavior.
 Task 12b1 adds snapshot-based prey detection and pursuit, herbivore-only food
-pickup, and executing-tick TargetKind diagnostics; attacks remain deferred.
+pickup, and executing-tick TargetKind diagnostics.
+Task 12b2 adds sequential contact consumption, snapshot-based prey energy transfer,
+atomic predation counters and nullable executing-tick attack outcomes.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

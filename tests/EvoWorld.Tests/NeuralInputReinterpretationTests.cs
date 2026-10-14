@@ -14,7 +14,7 @@ public sealed class NeuralInputReinterpretationTests
             energy: 60, sensing: 10, brain: brain);
         var prey = PursuitFixture.Organism(Species.Herbivore, id: 43, x: 23, y: 24);
         Food[] food = [new(0, 19, 20, 20)];
-        var simulation = PursuitFixture.Create([predator, prey], food, neural: true, duration: 0.5);
+        var simulation = PursuitFixture.Create([predator, prey], food, neural: true, duration: 0.5, pickup: 0);
         var inputs = PursuitFixture.Inputs(predator, simulation.State.World.Organisms, simulation.Settings, food, energy: 59);
         for (var i = 0; i < 6; i++) NeuralFixture.Near(PredatorInputReference.Inputs[i], inputs[i]);
         var expected = PredatorInputReference.Outputs();

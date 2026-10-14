@@ -44,7 +44,7 @@ public sealed class PredatorSettingsTests
             ["SensingRadiusMutationAmplitude"] = 2.0, ["SteeringRateMutationAmplitude"] = 0.1,
             ["EnableNeuralControl"] = true, ["NeuralWeightMin"] = -1.0, ["NeuralWeightMax"] = 1.0,
             ["InitialNeuralWeightVariationAmplitude"] = 0.5, ["SpeedModulationAmplitude"] = 0.5,
-            ["NeuralWeightMutationAmplitude"] = 0.125, ["InitialPredatorCount"] = 3, ["InitialPredatorEnergy"] = 175.0
+            ["NeuralWeightMutationAmplitude"] = 0.125, ["InitialPredatorCount"] = 3, ["InitialPredatorEnergy"] = 175.0, ["PredationEnergyTransferRatio"] = 0.8
         };
         Assert.Equal(expected.Keys.Order(), typeof(SimulationSettings).GetProperties().Select(p => p.Name).Order());
         foreach (var property in typeof(SimulationSettings).GetProperties()) Assert.Equal(expected[property.Name], property.GetValue(actual));

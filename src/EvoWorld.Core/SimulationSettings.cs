@@ -8,6 +8,7 @@ public sealed class SimulationSettings
     private const double DefaultOrganismSpeed = 50.0;
     public int InitialPredatorCount { get; }
     public double InitialPredatorEnergy { get; }
+    public double PredationEnergyTransferRatio { get; }
     public ulong Seed { get; }
     public double TickDurationSeconds { get; }
     public double WorldWidth { get; }
@@ -214,7 +215,41 @@ public sealed class SimulationSettings
         bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
         double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
         double neuralWeightMutationAmplitude, int initialPredatorCount, double initialPredatorEnergy)
+        : this(
+            seed, tickDurationSeconds, worldWidth, worldHeight,
+            initialOrganismCount, initialFoodCount, organismSpeed, organismEnergyDrainPerSecond,
+            foodPickupRadius, foodRegenerationIntervalSeconds, maxFoodCount, reproductionEnergyThreshold,
+            reproductionEnergyCost, offspringInitialEnergy, maxOrganismCount, initialSpeedVariationAmplitude,
+            initialMetabolismVariationAmplitude, minSpeed, maxSpeed, minMetabolism,
+            maxMetabolism, speedMutationAmplitude, metabolismMutationAmplitude, organismSensingRadius,
+            organismSteeringRate, initialSensingRadiusVariationAmplitude, initialSteeringRateVariationAmplitude, minSensingRadius,
+            maxSensingRadius, minSteeringRate, maxSteeringRate, sensingRadiusMutationAmplitude,
+            steeringRateMutationAmplitude, enableNeuralControl, neuralWeightMin, neuralWeightMax,
+            initialNeuralWeightVariationAmplitude, speedModulationAmplitude, neuralWeightMutationAmplitude, initialPredatorCount,
+            initialPredatorEnergy, 0.8)
     {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
+        bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
+        double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
+        double neuralWeightMutationAmplitude, int initialPredatorCount, double initialPredatorEnergy,
+        double predationEnergyTransferRatio)
+    {
+        if (!double.IsFinite(predationEnergyTransferRatio) || predationEnergyTransferRatio < 0 || predationEnergyTransferRatio > 1)
+            throw new ArgumentOutOfRangeException(nameof(predationEnergyTransferRatio));
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
         ValidatePositiveFinite(worldWidth, nameof(worldWidth));
         ValidatePositiveFinite(worldHeight, nameof(worldHeight));
@@ -284,6 +319,7 @@ public sealed class SimulationSettings
         InitialOrganismCount = initialOrganismCount;
         InitialPredatorCount = initialPredatorCount;
         InitialPredatorEnergy = initialPredatorEnergy;
+        PredationEnergyTransferRatio = predationEnergyTransferRatio;
         InitialFoodCount = initialFoodCount;
         OrganismSpeed = organismSpeed;
         OrganismEnergyDrainPerSecond = organismEnergyDrainPerSecond;

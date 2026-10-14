@@ -46,7 +46,7 @@ public sealed class PredatorBehaviorDeterminismTests
     [InlineData(true, 0.125, 80)]
     public void FoodRegenerationStillPrecedesSixOrEightyDrawBirths(bool neural, double mutation, int draws)
     {
-        var settings = PredatorFixture.Settings(neural: neural, mutation: mutation, food: 0, duration: 0.2);
+        var settings = PredatorFixture.Settings(neural: neural, mutation: mutation, food: 0, duration: 0.2, pickup: 0);
         var herbivore = PredatorFixture.Organism(Species.Herbivore, id: 7, energy: 500);
         var predator = PredatorFixture.Organism(Species.Predator, id: 43, energy: 500);
         var simulation = PredatorFixture.Create(settings, herbivore, predator);

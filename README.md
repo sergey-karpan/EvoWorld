@@ -204,6 +204,86 @@ add no RNG draws. Captures within a particular horizon, predator survival,
 population coexistence and adaptive success are not guaranteed. Species-specific
 traits, prey evasion and ecological tuning remain deferred to later work.
 
+## Population history and CSV export
+
+Task 12b4 adds **Population history...** beside the playback status. It opens a
+separate nonmodal window, closed by default, so the main world and scrolling
+inspector keep their space. Cyan solid and purple dashed curves show living
+herbivores and predators against **Tick**, including zero baselines. Lines connect
+recorded points; they do not reconstruct events between samples. The view shows
+the latest sample tick, count range, retained count, sampling interval and missed
+boundaries. Resizing changes the chart only; there is no second timer.
+
+Each active run records tick zero, then only actually observed committed ticks
+divisible by the fixed `SamplingIntervalTicks = 100`. Repeated observations,
+pending choices, paint, pause, inspection and off-boundary observations add no
+records. Skipped scheduled boundaries are not synthesized: their count appears
+in the next observed scheduled sample. A failed tick cannot publish history.
+Observation errors retain previous records, are reported separately, and do not
+undo a committed Core tick or silently stop playback.
+
+Records contain scalar summaries, not retained worlds or organisms. Population,
+food, cumulative births/deaths/predation, species traits and genomes come from one
+committed snapshot. Interval event counts are checked differences from the
+previous observed sample, covering the entire elapsed interval when observations
+were missed; they are not guaranteed to describe exactly 100 ticks. Tick-zero
+deltas are zero. Deaths use Core's cumulative counter, not a population difference.
+
+Species-specific Speed, Metabolism, SensingRadius and SteeringRate summaries use
+Core's ordered, scaled, compensated population-statistics semantics. Each includes
+Count, Min, Max, Mean and StandardDeviation (population denominator). Empty species
+have zero trait fields. Mean parameter variance is the arithmetic mean of the
+74 population variances across living genomes of each species. One genome or
+identical genomes gives zero; an empty species gives null. In Rule-based mode,
+genome data is not accessed and both species' diversity values are null (blank
+in CSV), explicitly labelled **inactive**. Dispersion does not
+measure fitness, learning, adaptation, lineage or individual reproductive success.
+
+Storage retains at most **50,000 samples** in a deterministic FIFO. The chart
+reports **HISTORY TRUNCATED** and the dropped-record count when older records are
+removed. Missed sampling boundaries and dropped retained records are separate
+quantities. Extinct worlds continue scheduled observations. Reset constructs a
+new simulation and tick-zero history before installing either; failed Reset keeps
+the previous run, history, selection and pending choices. Successful Reset discards
+the previous in-memory population history. **Export each run before Reset** to
+compare experiments; history is not persistent storage.
+
+The history window's **Export history CSV...** command exports a frozen copy of
+the active run's retained samples. Cancellation is a no-op. The file uses
+UTF-8 with BOM (0xEF 0xBB 0xBF), CRLF row separators, one header and ascending
+exact Int64 ticks. Excel opens the file without manual encoding selection. Metadata
+is repeated in constant columns; there is no preamble or automatic sidecar file.
+Floating-point fields use invariant-culture round-trip `R` formatting; nullable
+numbers are blank, never NaN or Infinity. `ModelTimeSeconds` is tick × configured
+timestep when finite, otherwise blank. Metadata text uses RFC-4180 quoting when
+needed. Seed remains an exact UInt64; no wall-clock timestamps are exported.
+
+The fixed **66-column order** is shown below in groups for readability. In the
+file these groups form one comma-separated header line:
+
+```text
+Tick,ModelTimeSeconds,OrganismCount,HerbivoreCount,PredatorCount,FoodCount,TotalBirths,TotalDeaths,TotalPredationEvents,BirthsSincePreviousSample,DeathsSincePreviousSample,PredationEventsSincePreviousSample,MissedSamplingBoundaries
+HerbivoreSpeedCount,HerbivoreSpeedMin,HerbivoreSpeedMax,HerbivoreSpeedMean,HerbivoreSpeedStandardDeviation,HerbivoreMetabolismCount,HerbivoreMetabolismMin,HerbivoreMetabolismMax,HerbivoreMetabolismMean,HerbivoreMetabolismStandardDeviation,HerbivoreSensingRadiusCount,HerbivoreSensingRadiusMin,HerbivoreSensingRadiusMax,HerbivoreSensingRadiusMean,HerbivoreSensingRadiusStandardDeviation,HerbivoreSteeringRateCount,HerbivoreSteeringRateMin,HerbivoreSteeringRateMax,HerbivoreSteeringRateMean,HerbivoreSteeringRateStandardDeviation,HerbivoreMeanParameterVariance
+PredatorSpeedCount,PredatorSpeedMin,PredatorSpeedMax,PredatorSpeedMean,PredatorSpeedStandardDeviation,PredatorMetabolismCount,PredatorMetabolismMin,PredatorMetabolismMax,PredatorMetabolismMean,PredatorMetabolismStandardDeviation,PredatorSensingRadiusCount,PredatorSensingRadiusMin,PredatorSensingRadiusMax,PredatorSensingRadiusMean,PredatorSensingRadiusStandardDeviation,PredatorSteeringRateCount,PredatorSteeringRateMin,PredatorSteeringRateMax,PredatorSteeringRateMean,PredatorSteeringRateStandardDeviation,PredatorMeanParameterVariance
+Seed,Controller,NeuralGenomeActive,NeuralMutationAmplitude,InitialPredatorCount,TickDurationSeconds,SamplingIntervalTicks,DroppedSamples,TotalMissedSamplingBoundaries,CoreVersion,RuntimeVersion
+```
+
+`Controller` is `RuleBased` or `Neural`; `NeuralGenomeActive` is `true` or `false`.
+Mutation and initial predator columns describe the effective active configuration.
+`DroppedSamples` and total missed boundaries describe the frozen export; per-row
+`MissedSamplingBoundaries` describes the gap before that row. A retained first row
+may have nonzero interval deltas referring to an earlier, now-dropped record.
+Core informational version (including source revision when available) and runtime
+version identify the supported execution context; cross-runtime bitwise equivalence
+is not promised.
+
+Export writes and flushes a unique temporary sibling. A new target is published
+by a non-overwriting move; an existing target uses atomic replacement. Failed
+replacement has no overwrite fallback and preserves the previous file; cleanup
+targets only the temporary sibling. I/O errors are shown in the history window
+without altering the simulation or its history. No automatic exports, uploads,
+database, learning or ecological tuning are introduced.
+
 ## Population Statistics
 
 Task 10 makes evolutionary dynamics observable without producing new behavior.
@@ -242,7 +322,7 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, neural weight statistics, detailed predation statistics and
+correlations, lineage and generational statistics, detailed per-parameter neural weight statistics, detailed predation statistics and
 advanced visualization remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
@@ -375,7 +455,7 @@ Task 11c golden calculations and their invocation are stored in
 
 Statistics retain their existing API and inherited-trait aggregation; measured
 populations may differ because neural control and mutation change behavior.
-Learning, backpropagation, memory and neural weight statistics remain deferred.
+Learning, backpropagation, memory and detailed per-parameter neural weight statistics remain deferred.
 
 ## Species Infrastructure
 
@@ -936,6 +1016,8 @@ Task 12b2 adds sequential contact consumption, snapshot-based prey energy transf
 atomic predation counters and nullable executing-tick attack outcomes.
 Task 12b3 adds Desktop predator choices with pending Reset semantics, purple
 predator outlines, a legend, and live species and cumulative predation counts.
+Task 12b4 adds bounded sampled population history, species trait and descriptive
+genome dispersion summaries, population curves and explicit atomic CSV export.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

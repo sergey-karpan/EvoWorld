@@ -34,7 +34,12 @@
             <TextBlock x:Name="TickText" Text="Tick: 0" Foreground="White" TextWrapping="Wrap" />
             <TextBlock x:Name="StatisticsText" Foreground="#C4CFDC" TextWrapping="Wrap" />
         </StackPanel>
-        <TextBlock x:Name="StatusText" DockPanel.Dock="Bottom" Text="Ready" Foreground="#C4CFDC" Margin="12,8" TextWrapping="Wrap" />
+        <DockPanel DockPanel.Dock="Bottom" Margin="12,8">
+            <Button DockPanel.Dock="Right" Content="Population history..." Click="History_Click" Padding="10,4" Margin="8,0,0,0"
+                    ToolTip="Open sampled population curves and Export history CSV. Reset discards this run's history." />
+            <TextBlock x:Name="StatusText" Text="Ready" Foreground="#C4CFDC" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </DockPanel>
+        <TextBlock x:Name="HistoryErrorText" DockPanel.Dock="Bottom" Visibility="Collapsed" Foreground="#FFD166" Margin="12,4" TextWrapping="Wrap" />
         <TextBlock x:Name="LegendText" DockPanel.Dock="Bottom" Foreground="#C4CFDC" Margin="12,4" TextWrapping="Wrap">
             <Run Text="Herbivores: trait fill · " />
             <Run Text="Predators: purple outline" Foreground="#D568FF" />

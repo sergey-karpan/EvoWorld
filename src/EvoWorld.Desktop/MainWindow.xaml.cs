@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private string _playbackStatus = "Ready";
     private int _canvasWidth;
     private int _canvasHeight;
+    private PopulationHistoryWindow? _historyWindow;
 
     public MainWindow() : this(new DesktopExperiment())
     {
@@ -95,6 +96,23 @@ public partial class MainWindow : Window
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e) => Viewport.InvalidateVisual();
+
+    private void History_Click(object sender, RoutedEventArgs e)
+    {
+        PopulationHistoryWindow? window = null;
+        try
+        {
+            if (_historyWindow is not null) { _historyWindow.Activate(); return; }
+            window = new PopulationHistoryWindow(() => _experiment.History, () => _experiment.HistoryObservationError) { Owner = this };
+            window.Closed += (_, _) => _historyWindow = null;
+            window.Show(); _historyWindow = window;
+        }
+        catch (Exception exception)
+        {
+            window?.Close();
+            HistoryErrorText.Text = $"History view failed: {exception.Message}"; HistoryErrorText.Visibility = Visibility.Visible;
+        }
+    }
 
     private void WorldArea_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -174,6 +192,10 @@ public partial class MainWindow : Window
             $"{label}: {moments.Mean:G4} ± {moments.StandardDeviation:G4} | Births: {statistics.TotalBirths} | Deaths: {statistics.TotalDeaths}");
         InspectorPanel.Visibility = _experiment.Inspection.SelectedId is null ? Visibility.Collapsed : Visibility.Visible;
         InspectorText.Text = _experiment.Inspection.Format(ActiveSimulation);
+        HistoryErrorText.Text = _experiment.HistoryObservationError ?? "";
+        HistoryErrorText.Visibility = _experiment.HistoryObservationError is null ? Visibility.Collapsed : Visibility.Visible;
+        try { _historyWindow?.Refresh(); }
+        catch (Exception exception) { HistoryErrorText.Text = $"History view failed: {exception.Message}"; HistoryErrorText.Visibility = Visibility.Visible; }
     }
 
     private void ShowError(string context, Exception exception)
@@ -188,6 +210,7 @@ public partial class MainWindow : Window
         _closed = true;
         _timer.Stop();
         _timer.Tick -= Timer_Tick;
+        _historyWindow?.Close();
         _renderer.Dispose();
         base.OnClosed(e);
     }

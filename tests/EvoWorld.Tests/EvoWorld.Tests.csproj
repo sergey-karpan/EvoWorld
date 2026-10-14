@@ -14,6 +14,9 @@
     <Compile Include="../../src/EvoWorld.Desktop/DesktopExperiment.cs" Link="Desktop/DesktopExperiment.cs" />
     <Compile Include="../../src/EvoWorld.Desktop/OrganismInspection.cs" Link="Desktop/OrganismInspection.cs" />
     <Compile Include="../../src/EvoWorld.Desktop/OrganismHitTesting.cs" Link="Desktop/OrganismHitTesting.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/PopulationHistory.cs" Link="Desktop/PopulationHistory.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/HistoryStatistics.cs" Link="Desktop/HistoryStatistics.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/PopulationHistoryCsv.cs" Link="Desktop/PopulationHistoryCsv.cs" />
     <ProjectReference Include="../../src/EvoWorld.Core/EvoWorld.Core.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">

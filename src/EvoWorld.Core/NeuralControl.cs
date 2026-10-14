@@ -14,9 +14,18 @@ internal static class NeuralControl
         IReadOnlyList<Food> food, bool[] consumed, SimulationSettings settings,
         int trackedOrganismId, long tickCount, ref OrganismDiagnosticSample? diagnosticSample)
     {
+        ValidateEnergy(energy);
+        var target = TargetSensing.Resolve(organism, food, consumed, Array.Empty<Organism>());
+        return Evaluate(organism, energy, target, settings, trackedOrganismId, tickCount, ref diagnosticSample);
+    }
+
+    internal static (double Heading, double EffectiveSpeed) Evaluate(Organism organism, double energy,
+        SensedTarget target, SimulationSettings settings, int trackedOrganismId, long tickCount,
+        ref OrganismDiagnosticSample? diagnosticSample)
+    {
         Span<double> inputs = stackalloc double[NeuralGenome.InputCount];
         Span<double> outputs = stackalloc double[NeuralGenome.OutputCount];
-        EncodeInputs(organism, energy, food, consumed, settings, inputs);
+        EncodeInputs(organism, energy, target, settings, inputs);
         organism.Brain.Forward(inputs, outputs);
         foreach (var output in outputs)
             if (!double.IsFinite(output) || output < -1 || output > 1)
@@ -33,35 +42,37 @@ internal static class NeuralControl
         var heading = rotation == 0 ? organism.HeadingRadians : FoodSeeking.Normalize(organism.HeadingRadians + rotation);
         if (organism.Id == trackedOrganismId)
             diagnosticSample = new(organism.Id, tickCount, true, true,
-                outputs[0], outputs[1], rotation, effectiveSpeed);
+                outputs[0], outputs[1], rotation, effectiveSpeed, target.Kind);
         return (heading, effectiveSpeed);
     }
 
     internal static void EncodeInputs(Organism organism, double energy, IReadOnlyList<Food> food,
         bool[] consumed, SimulationSettings settings, Span<double> inputs)
     {
-        if (!double.IsFinite(energy) || energy < 0)
-            throw new OverflowException("Neural energy input must be finite and nonnegative.");
+        ValidateEnergy(energy);
+        var target = TargetSensing.Resolve(organism, food, consumed, Array.Empty<Organism>());
+        EncodeInputs(organism, energy, target, settings, inputs);
+    }
+
+    internal static void EncodeInputs(Organism organism, double energy, SensedTarget target,
+        SimulationSettings settings, Span<double> inputs)
+    {
+        ValidateEnergy(energy);
         inputs[0] = 0; inputs[1] = 1; inputs[2] = -1;
         var radius = FoodDistance.FromLength(organism.SensingRadius);
-        if (organism.SensingRadius > 0)
+        if (organism.SensingRadius > 0 && target.Kind != TargetKind.None)
         {
-            var selected = FoodSeeking.FindNearest(organism.X, organism.Y, food, consumed, radius);
-            if (selected >= 0)
+            var dx = target.X - organism.X; var dy = target.Y - organism.Y;
+            // Exact coordinate coincidence only; an underflowed distance ratio is not coincidence.
+            if (dx == 0 && dy == 0) inputs[2] = 1;
+            else
             {
-                var target = food[selected];
-                var dx = target.X - organism.X; var dy = target.Y - organism.Y;
-                // Exact coordinate coincidence only; an underflowed distance ratio is not coincidence.
-                if (dx == 0 && dy == 0) inputs[2] = 1;
-                else
-                {
-                    var targetHeading = FoodSeeking.Normalize(Math.Atan2(dy, dx));
-                    var angle = targetHeading - organism.HeadingRadians;
-                    if (angle > Math.PI) angle -= 2 * Math.PI;
-                    if (angle <= -Math.PI) angle += 2 * Math.PI;
-                    inputs[0] = Math.Sin(angle); inputs[1] = Math.Cos(angle);
-                    inputs[2] = 1 - 2 * ClampedRatio(FoodDistance.Between(organism.X, organism.Y, target.X, target.Y), radius);
-                }
+                var targetHeading = FoodSeeking.Normalize(Math.Atan2(dy, dx));
+                var angle = targetHeading - organism.HeadingRadians;
+                if (angle > Math.PI) angle -= 2 * Math.PI;
+                if (angle <= -Math.PI) angle += 2 * Math.PI;
+                inputs[0] = Math.Sin(angle); inputs[1] = Math.Cos(angle);
+                inputs[2] = 1 - 2 * ClampedRatio(FoodDistance.Between(organism.X, organism.Y, target.X, target.Y), radius);
             }
         }
         inputs[3] = 2 * Math.Min(energy / WorldInitializer.InitialOrganismEnergy, 1) - 1;
@@ -73,6 +84,12 @@ internal static class NeuralControl
         foreach (var input in inputs)
             if (!double.IsFinite(input) || input < -1 || input > 1)
                 throw new OverflowException("Neural inputs must be finite and in [-1,1].");
+    }
+
+    private static void ValidateEnergy(double energy)
+    {
+        if (!double.IsFinite(energy) || energy < 0)
+            throw new OverflowException("Neural energy input must be finite and nonnegative.");
     }
 
     private static double ClampedRatio(FoodDistance numerator, FoodDistance denominator)

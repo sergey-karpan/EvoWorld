@@ -207,7 +207,7 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 These controls only observe the simulation.
 
 There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, neural weight statistics, predators and
+correlations, lineage and generational statistics, neural weight statistics, attack/consumption statistics and
 advanced visualization remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
@@ -244,7 +244,9 @@ All older signatures retain these defaults. Neural settings are validated even
 when disabled; custom brains need only satisfy `NeuralGenome`'s [-8,8] bounds.
 
 After drain and before movement/feeding, survivors encode these six channels
-from their starting position, heading and inherited traits:
+from their starting position, heading and inherited traits. Food-bearing terms
+below describe herbivores; predators use the corresponding prey-bearing terms
+from the previous snapshot, with indices 3–5 unchanged:
 
 | Input | Meaning |
 |---|---|
@@ -255,7 +257,7 @@ from their starting position, heading and inherited traits:
 | 4 | `2 * clamp(fraction(Speed, MinSpeed, MaxSpeed), 0, 1) - 1` |
 | 5 | `1 - 2 * clamp(nearest wall distance / SensingRadius, 0, 1)` |
 
-Food eligibility and ties use Task 9's nearest not-yet-consumed food and smallest
+Herbivore food eligibility and ties use Task 9's nearest not-yet-consumed food and smallest
 ID. No food gives `(0,1,-1)` for channels 0–2; positive-radius coincidence gives
 `(0,1,1)`. Zero radius disables sensing and gives channel 5=-1. Food regenerated
 this tick remains unavailable. Distance ratios use `FoodDistance`'s scaled
@@ -373,16 +375,16 @@ including when the initial population exceeds it.
 sum equals `OrganismCount`. Existing trait moments and derived birth/death totals
 cover all organisms. Species counts use the same committed snapshot and zero RNG.
 
-Predators currently move, drain energy, seek/eat food, reproduce and die under the
-same rules as herbivores. Predator pursuit, attack and prey consumption belong to
-Task 12b; species-specific trait baselines remain deferred to Task 12c. Task 12a
-does not implement predator-prey dynamics.
+Task 12a initially gave both species the same behavior. Task 12b1 now makes
+predators pursue herbivores and skip food pickup; drain, movement, reproduction
+and death retain their shared rules. Attack and prey consumption remain deferred
+to Task 12b2, and species-specific trait baselines to Task 12c.
 
 With zero predators, historical placement, traits, genomes, RNG contracts and
 behavior remain unchanged. Equivalent settings and seeds reproduce mixed worlds
-and subsequent ticks on the supported runtime. The Task 11e diagnostic API and
-`OrganismDiagnosticSample` are unchanged: samples identify organisms by ID; species
-is available from the committed world without expanding telemetry. Desktop defaults
+and subsequent ticks on the supported runtime. Observer configuration and diagnostic
+publication remain unchanged; Task 12b1 adds only the sensed `TargetKind` to
+`OrganismDiagnosticSample`. Species is still resolved from the world. Desktop defaults
 remain herbivore-only, and controls, inspector, trajectory and pending/active
 semantics are unchanged. Species visualization is deferred.
 
@@ -392,6 +394,58 @@ under `tests/EvoWorld.Tests/Fixtures/`. Reproduce the fixture from the repositor
 ```powershell
 python tests/EvoWorld.Tests/Fixtures/predator_initialization_reference.py > tests/EvoWorld.Tests/Fixtures/PredatorInitializationGolden.cs
 ```
+
+## Prey Detection and Pursuit
+
+Task 12b1 resolves one executing-tick sensing target for each acting organism.
+Herbivores retain nearest available food targeting and food pickup; predators
+sense only `Species.Herbivore` organisms and never consume food. Both use the
+existing inclusive SensingRadius and deterministic distance/smallest-ID ties.
+Radius zero disables sensing, including coincident targets. Predators cannot
+target themselves or other predators, irrespective of ID ranges or list position.
+
+Prey positions and eligibility come from the single previous committed snapshot.
+Earlier movement and metabolic deaths do not alter this tick's target selection:
+a herbivore that dies during the tick remains eligible for sensing in that tick.
+Newborns become eligible only in the next committed snapshot. Herbivore sensing
+still excludes food consumed by earlier IDs; regenerated food is sensed next tick.
+
+Rule-based pursuit reuses the existing shortest-angle, positive half-turn,
+rate-limited steering and reflection rules. Neural control retains its 6→8→2
+network and the same zero-based channels:
+
+| Index | Herbivore | Predator |
+|---|---|---|
+| 0 | Sine of relative food bearing | Sine of relative prey bearing |
+| 1 | Cosine of relative food bearing | Cosine of relative prey bearing |
+| 2 | Normalized food proximity | Normalized prey proximity |
+| 3 | Normalized post-drain energy | Unchanged |
+| 4 | Normalized inherited speed | Unchanged |
+| 5 | Normalized nearest-wall proximity | Unchanged |
+
+No-target and coincident-target conventions and all numerical formulas remain
+unchanged. Prey ranking reuses the scaled FoodDistance representation, preserving
+large-coordinate and subnormal-radius safety without squared-distance overflow.
+
+`OrganismDiagnosticSample.TargetKind` is immutable: None=0, Food=1, Prey=2. It
+records the exact sensing choice used by the executing controller at the sample's
+tick, including rule-based actors with zero SteeringRate. It describes neither
+pickup nor prey capture; a target can be missed, eaten later, or die during the tick.
+DidAct=false always reports None. No target ID/distance is retained or reconstructed.
+The sample commits with world, RNG and IDs; failure preserves the previous sample.
+
+Target selection, pursuit and telemetry add zero RNG draws or extra forward passes.
+Initialization, regeneration and birth draw contracts are unchanged. Zero-predator
+worlds preserve historical herbivore behavior and goldens; identical mixed runs
+remain reproducible on the supported runtime. Predators may starve while chasing:
+there is no attack, prey consumption, damage or energy transfer yet. Prey evasion,
+species-specific traits and further ecological behavior remain deferred.
+
+Desktop and its inspector are unchanged; TargetKind is available through Core
+telemetry. Independent scalar input/output and herbivore regression oracles are in
+`tests/EvoWorld.Tests/Fixtures/PredatorInputReference.cs` and
+`tests/EvoWorld.Tests/Fixtures/HerbivorePursuitReference.cs`; no external tooling is
+needed to reproduce these calculations.
 
 ## Architecture Decisions
 
@@ -511,27 +565,30 @@ environment is not claimed to be universally bitwise identical.
 `FoodPickupRadius` defaults to 8 world units between centers. Both are immutable,
 finite, and nonnegative. Four-, six-, and seven-argument settings constructors
 retain their earlier parameters and use these defaults. The nine-argument overload
-allows explicit values, including zero. Initial energies remain 100 and 20.
+allows explicit values, including zero. Herbivore and food initial energies remain
+100 and 20; predators use InitialPredatorEnergy.
 
 Each tick processes organisms in ascending stable ID order:
 
 1. Subtract individual Metabolism times configured timestep, even when stationary.
 2. Remove organisms with energy at or below zero; they neither move nor feed.
-3. Sense available food, steer, move survivors from previous positions, and reflect boundaries.
-4. At the resulting position, claim at most one currently available food item
+3. Resolve the species-specific target, steer, move survivors from previous positions,
+   and reflect boundaries. Predators sense herbivores from the previous snapshot.
+4. Herbivores at the resulting position claim at most one currently available food item
    within the inclusive pickup radius: nearest distance, then smallest food ID
    when computed distances are exactly equal.
-5. Add that food's energy without an energy cap and create a replacement organism.
+5. Add any claimed food's energy without an energy cap and create a replacement organism.
+   Predators skip pickup entirely.
 6. Build surviving-organism and unconsumed-food collections, regenerate food, reproduce, then publish one
    complete immutable snapshot with the incremented tick count.
 
-An exhausted organism cannot be rescued by food that tick. Earlier organism IDs
-get first opportunity at contested food; later organisms search only unclaimed
+An exhausted organism cannot be rescued by food that tick. Earlier herbivore IDs
+get first opportunity at contested food; later herbivores search only unclaimed
 food. Movement never depends on positions updated earlier in the tick. Food stays
 stationary until consumed. Unconsumed food objects are reused. IDs remain stable,
 may have gaps, and are never renumbered. An extinct world continues ticking.
 The internal test constructor accepts shrinking counts and strictly ascending,
-unique, nonnegative IDs. Organisms cannot exceed the greater of initial count and
+unique, nonnegative IDs. Organisms cannot exceed the greater of combined initial count and
 reproduction ceiling; food cannot
 exceed the greater of initial food count and regeneration ceiling.
 
@@ -726,7 +783,7 @@ amplitude is nonzero. With N organisms and F food items, the four modes consume
 3N+2F, 5N+2F (old only), 5N+2F (new only), or 7N+2F (both). Old-only Task 8 values
 and stream states remain unchanged; no traits are interleaved with placement.
 
-With neural control disabled, after metabolic drain each survivor searches food
+With neural control disabled, after metabolic drain each herbivore searches food
 not consumed by earlier IDs, using its starting position. FoodDistance selects the nearest within the inclusive
 sensing radius, with smallest-ID ties. Radius zero disables sensing entirely,
 including coincidence. Positive-radius coincident food is a valid nearest target
@@ -753,7 +810,7 @@ births consume zero, and food regeneration still consumes two per successful spa
 
 Food seeking is reactive: there is no stored target, memory, route planning, or
 learning. Selection may affect sensory traits over generations, without guaranteed
-adaptation. Multiple sensors, predator/prey behavior, obstacle avoidance, flocking,
+adaptation. Multiple sensors, attacks and prey consumption, obstacle avoidance, flocking,
 pathfinding, learning, sexual reproduction, advanced visualization, and persistence
 remain deferred.
 
@@ -784,6 +841,8 @@ Task 11e adds selected-organism inspection, a bounded sampled trajectory, and
 exact executing-tick neural telemetry published with the simulation transaction.
 Task 12a adds species identity, deterministic predator initialization, and population
 species counts while preserving the existing shared behavior.
+Task 12b1 adds snapshot-based prey detection and pursuit, herbivore-only food
+pickup, and executing-tick TargetKind diagnostics; attacks remain deferred.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

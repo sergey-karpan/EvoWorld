@@ -26,6 +26,7 @@ internal static class PredatorFixture
     {
         if (expected is null) { Assert.Null(actual); return; }
         Assert.NotNull(actual);
+        Assert.Equal(expected.TargetKind, actual.TargetKind);
         Assert.Equal((expected.OrganismId, expected.TickCount, expected.DidAct, expected.IsNeuralMode, expected.IsRuleBasedMode),
             (actual.OrganismId, actual.TickCount, actual.DidAct, actual.IsNeuralMode, actual.IsRuleBasedMode));
         double?[] first = [expected.NeuralOutputSteering, expected.NeuralOutputSpeed, expected.AppliedRotationRadians, expected.EffectiveSpeed];

@@ -143,16 +143,17 @@ public sealed class Simulation
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
+            var target = TargetSensing.Resolve(organism, foodItems, consumed, previous.World.Organisms);
             double heading, effectiveSpeed;
             if (Settings.EnableNeuralControl)
-                (heading, effectiveSpeed) = NeuralControl.Evaluate(organism, energy, foodItems, consumed,
+                (heading, effectiveSpeed) = NeuralControl.Evaluate(organism, energy, target,
                     Settings, _trackedOrganismId, nextTick, ref diagnosticSample);
             else
             {
-                heading = FoodSeeking.Steer(organism, foodItems, consumed, Settings.TickDurationSeconds);
+                heading = FoodSeeking.Steer(organism, target, Settings.TickDurationSeconds);
                 effectiveSpeed = organism.Speed;
                 if (organism.Id == _trackedOrganismId)
-                    diagnosticSample = new(organism.Id, nextTick, true, false);
+                    diagnosticSample = new(organism.Id, nextTick, true, false, targetKind: target.Kind);
             }
             if (FailSteeringForOrganismIdForTesting == organism.Id)
                 throw new InvalidOperationException("Injected steering failure.");
@@ -168,7 +169,8 @@ public sealed class Simulation
                 heading = Normalize(Math.PI - heading);
             else if (y.Reflected)
                 heading = Normalize(-heading);
-            var selected = FoodSeeking.FindNearest(x.Position, y.Position, foodItems, consumed, radius);
+            var selected = organism.Species == Species.Herbivore
+                ? FoodSeeking.FindNearest(x.Position, y.Position, foodItems, consumed, radius) : -1;
             if (selected >= 0)
             {
                 energy += foodItems[selected].Energy;

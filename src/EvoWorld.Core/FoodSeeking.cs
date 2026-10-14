@@ -8,8 +8,15 @@ internal static class FoodSeeking
         var index = FindNearest(organism.X, organism.Y, foodItems, consumed, FoodDistance.FromLength(organism.SensingRadius));
         if (index < 0) return organism.HeadingRadians;
         var food = foodItems[index];
-        var dx = food.X - organism.X;
-        var dy = food.Y - organism.Y;
+        return Steer(organism, new SensedTarget(TargetKind.Food, food.X, food.Y), timestep);
+    }
+
+    internal static double Steer(Organism organism, SensedTarget sensedTarget, double timestep)
+    {
+        if (organism.SensingRadius == 0 || organism.SteeringRate == 0 || sensedTarget.Kind == TargetKind.None)
+            return organism.HeadingRadians;
+        var dx = sensedTarget.X - organism.X;
+        var dy = sensedTarget.Y - organism.Y;
         if (dx == 0 && dy == 0) return organism.HeadingRadians;
         var target = Normalize(Math.Atan2(dy, dx));
         var delta = target - organism.HeadingRadians;

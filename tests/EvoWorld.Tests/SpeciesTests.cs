@@ -44,8 +44,10 @@ public sealed class SpeciesTests
         simulation.AdvanceTick();
         var current = Assert.Single(simulation.State.World.Organisms);
         Assert.Equal(species, current.Species); Assert.Same(organism.Brain, current.Brain);
-        Assert.NotSame(organism, current); Assert.Equal(179, current.Energy);
+        Assert.NotSame(organism, current); Assert.Equal(species == Species.Herbivore ? 179 : 159, current.Energy);
         Assert.NotEqual(organism.X, current.X); Assert.InRange(current.HeadingRadians, Math.PI / 2, 3 * Math.PI / 2);
-        Assert.Empty(simulation.State.World.FoodItems); Assert.Equal(160, organism.Energy);
+        if (species == Species.Herbivore) Assert.Empty(simulation.State.World.FoodItems);
+        else Assert.Single(simulation.State.World.FoodItems);
+        Assert.Equal(160, organism.Energy);
     }
 }

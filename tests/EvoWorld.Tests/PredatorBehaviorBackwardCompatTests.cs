@@ -30,7 +30,7 @@ public sealed class PredatorBehaviorBackwardCompatTests
     [InlineData(true)]
     public void SpeciesClassificationDoesNotAffectAnyTickBehaviorOrDiagnosticCommands(bool neural)
     {
-        var settings = PredatorFixture.Settings(neural: neural, food: 0, duration: 0.2);
+        var settings = PredatorFixture.Settings(neural: neural, food: 0, foodCap: 0, duration: 0.2);
         var brain = NeuralFixture.Brain(0.3, -0.2);
         var herbivore = PredatorFixture.Create(settings, PredatorFixture.Organism(Species.Herbivore, energy: 500, speed: 10, metabolism: 1, brain: brain));
         var predator = PredatorFixture.Create(settings, PredatorFixture.Organism(Species.Predator, energy: 500, speed: 10, metabolism: 1, brain: brain));
@@ -70,7 +70,7 @@ public sealed class PredatorBehaviorBackwardCompatTests
     public void DiagnosticPublicShapeAndLifetimeAreUnchangedForPredators()
     {
         string[] expected = ["OrganismId", "TickCount", "DidAct", "IsNeuralMode", "IsRuleBasedMode",
-            "NeuralOutputSteering", "NeuralOutputSpeed", "AppliedRotationRadians", "EffectiveSpeed"];
+            "NeuralOutputSteering", "NeuralOutputSpeed", "AppliedRotationRadians", "EffectiveSpeed", "TargetKind"];
         Assert.Equal(expected.Order(), typeof(OrganismDiagnosticSample).GetProperties().Select(p => p.Name).Order());
         var simulation = PredatorFixture.Create(PredatorFixture.Settings(neural: true, food: 0, foodCap: 0, duration: 1),
             PredatorFixture.Organism(Species.Predator, id: 43, energy: 1.5, metabolism: 1));

@@ -33,6 +33,8 @@ public partial class MainWindow : Window
         };
         _timer.Tick += Timer_Tick;
         InitializeComponent();
+        PredatorSelector.ItemsSource = ExperimentSettings.PredatorChoices.ToArray();
+        PredatorSelector.SelectedItem = _experiment.PendingOptions.InitialPredatorCount;
         MutationSelector.ItemsSource = ExperimentSettings.MutationChoices.ToArray();
         MutationSelector.SelectedItem = _experiment.PendingOptions.MutationAmplitude;
         TraitSelector.ItemsSource = Enum.GetValues<ColorTrait>();
@@ -116,9 +118,10 @@ public partial class MainWindow : Window
     private void ExperimentSelection_Changed(object sender, SelectionChangedEventArgs e)
     {
         // Selection events can occur before InitializeComponent has built every control.
-        if (MutationSelector is null || ConfigurationText is null || MutationSelector.SelectedItem is not double amplitude) return;
+        if (MutationSelector is null || PredatorSelector is null || ConfigurationText is null
+            || MutationSelector.SelectedItem is not double amplitude || PredatorSelector.SelectedItem is not int predators) return;
         var controller = ControllerSelector.SelectedIndex == 1 ? ControllerMode.Neural : ControllerMode.RuleBased;
-        _experiment.Select(new ExperimentOptions(controller, amplitude));
+        _experiment.Select(new ExperimentOptions(controller, amplitude, predators));
         MutationSelector.IsEnabled = controller == ControllerMode.Neural;
         UpdateConfigurationReadout();
     }
@@ -131,7 +134,7 @@ public partial class MainWindow : Window
         var mutation = settings.EnableNeuralControl && settings.NeuralWeightMutationAmplitude > 0 ? "enabled" : "off";
         var pending = _experiment.HasPendingChanges ? " | Pending Reset" : "";
         ConfigurationText.Text = string.Create(CultureInfo.InvariantCulture,
-            $"Active: {mode} | Neural: {enabled} | Mutation setting: {settings.NeuralWeightMutationAmplitude:G3} ({mutation}){pending}");
+            $"Active: {mode} | Neural: {enabled} | Mutation setting: {settings.NeuralWeightMutationAmplitude:G3} ({mutation}) | Initial predators: {settings.InitialPredatorCount}{pending}");
     }
 
     private ColorTrait SelectedTrait => TraitSelector.SelectedItem is ColorTrait trait ? trait : ColorTrait.None;
@@ -156,7 +159,8 @@ public partial class MainWindow : Window
     private void UpdateReadout()
     {
         var statistics = ActiveSimulation.GetStatistics();
-        TickText.Text = $"Tick: {statistics.TickCount} | Organisms: {statistics.OrganismCount} | Food: {statistics.FoodCount}";
+        TickText.Text = $"Tick: {statistics.TickCount} | Organisms: {statistics.OrganismCount} | Food: {statistics.FoodCount}"
+            + $" | Herbivores: {statistics.HerbivoreCount} | Predators: {statistics.PredatorCount} | Predation: {statistics.TotalPredationEvents}";
         var trait = SelectedTrait;
         var moments = trait switch
         {

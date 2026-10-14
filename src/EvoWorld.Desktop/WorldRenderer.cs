@@ -10,6 +10,7 @@ internal sealed class WorldRenderer : IDisposable
     private readonly SKPaint _food = new() { Color = new SKColor(115, 219, 121), IsAntialias = true };
     private readonly SKPaint _organism = new() { Color = new SKColor(65, 201, 235), IsAntialias = true };
     private readonly SKPaint _heading = new() { Color = new SKColor(222, 247, 255), StrokeWidth = 1.5f, IsAntialias = true };
+    private readonly SKPaint _predatorOutline = new() { Color = new SKColor(213, 104, 255), Style = SKPaintStyle.Stroke, IsAntialias = true };
     private readonly SKPaint _selection = new() { Color = new SKColor(255, 209, 102), Style = SKPaintStyle.Stroke, IsAntialias = true };
     private readonly SKPaint _trail = new() { Color = new SKColor(255, 209, 102, 100), Style = SKPaintStyle.Stroke, IsAntialias = true };
 
@@ -55,6 +56,19 @@ internal sealed class WorldRenderer : IDisposable
                 _organism.Color = OrganismColoring.Color(OrganismColoring.Value(organism, trait), min, max, trait);
                 canvas.DrawCircle((float)organism.X, (float)organism.Y, 5, _organism);
             }
+            // Physical-pixel strokes avoid inverse-scale overflow. Circle geometry,
+            // clip and hit testing stay unchanged; species is independent of trait fill.
+            canvas.Save();
+            try
+            {
+                canvas.SetMatrix(originalMatrix);
+                _predatorOutline.StrokeWidth = Math.Clamp(1.5f * view.Scale, 1.5f, 3f);
+                foreach (var organism in world.Organisms)
+                    if (organism.Species == Species.Predator)
+                        canvas.DrawCircle((float)(view.OffsetX + organism.X * view.Scale),
+                            (float)(view.OffsetY + organism.Y * view.Scale), 5 * view.Scale, _predatorOutline);
+            }
+            finally { canvas.Restore(); }
             foreach (var organism in world.Organisms)
                 canvas.DrawLine((float)organism.X, (float)organism.Y,
                     (float)(organism.X + 10 * Math.Cos(organism.HeadingRadians)),
@@ -87,6 +101,7 @@ internal sealed class WorldRenderer : IDisposable
         _food.Dispose();
         _organism.Dispose();
         _heading.Dispose();
+        _predatorOutline.Dispose();
         _selection.Dispose();
         _trail.Dispose();
     }

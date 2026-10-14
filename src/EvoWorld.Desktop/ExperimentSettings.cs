@@ -4,20 +4,23 @@ namespace EvoWorld.Desktop;
 
 internal enum ControllerMode { RuleBased, Neural }
 
-internal readonly record struct ExperimentOptions(ControllerMode Controller, double MutationAmplitude)
+internal readonly record struct ExperimentOptions(ControllerMode Controller, double MutationAmplitude, int InitialPredatorCount)
 {
+    public ExperimentOptions(ControllerMode controller, double mutationAmplitude) : this(controller, mutationAmplitude, 0) { }
     internal static ExperimentOptions Initial => new(ControllerMode.RuleBased, 0.1);
-    internal ExperimentOptions Effective => Controller == ControllerMode.Neural ? this : new(Controller, 0);
+    internal ExperimentOptions Effective => Controller == ControllerMode.Neural ? this : new(Controller, 0, InitialPredatorCount);
 }
 
 internal static class ExperimentSettings
 {
     internal static ReadOnlySpan<double> MutationChoices => [0, 0.05, 0.1, 0.5];
+    internal static ReadOnlySpan<int> PredatorChoices => [0, 2, 5, 10];
 
     internal static void Validate(ExperimentOptions options)
     {
         if (!Enum.IsDefined(options.Controller)) throw new ArgumentOutOfRangeException(nameof(options));
         if (!MutationChoices.Contains(options.MutationAmplitude)) throw new ArgumentOutOfRangeException(nameof(options));
+        if (!PredatorChoices.Contains(options.InitialPredatorCount)) throw new ArgumentOutOfRangeException(nameof(options));
     }
 
     internal static SimulationSettings Create(ExperimentOptions options)
@@ -29,7 +32,7 @@ internal static class ExperimentSettings
             throw new InvalidOperationException("The neural demonstration requires positive Core initial weight variation.");
         // Core configuration is immutable and uses positional constructors. Keep
         // this Desktop-only mapping explicit, centralized, and tested property by
-        // property. Only controller enable and birth-time mutation are overridden.
+        // property. Only controller enable, birth-time mutation and initial predator count are overridden.
         return new SimulationSettings(baseline.Seed, baseline.TickDurationSeconds, baseline.WorldWidth, baseline.WorldHeight,
             baseline.InitialOrganismCount, baseline.InitialFoodCount, baseline.OrganismSpeed,
             baseline.OrganismEnergyDrainPerSecond, baseline.FoodPickupRadius, baseline.FoodRegenerationIntervalSeconds,
@@ -41,6 +44,7 @@ internal static class ExperimentSettings
             baseline.InitialSteeringRateVariationAmplitude, baseline.MinSensingRadius, baseline.MaxSensingRadius,
             baseline.MinSteeringRate, baseline.MaxSteeringRate, baseline.SensingRadiusMutationAmplitude,
             baseline.SteeringRateMutationAmplitude, neural, baseline.NeuralWeightMin, baseline.NeuralWeightMax,
-            baseline.InitialNeuralWeightVariationAmplitude, baseline.SpeedModulationAmplitude, options.Effective.MutationAmplitude);
+            baseline.InitialNeuralWeightVariationAmplitude, baseline.SpeedModulationAmplitude, options.Effective.MutationAmplitude,
+            options.Effective.InitialPredatorCount, baseline.InitialPredatorEnergy, baseline.PredationEnergyTransferRatio);
     }
 }

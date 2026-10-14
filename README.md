@@ -82,7 +82,7 @@ is 10. Draw order is background, boundary, food, organisms, then headings.
 Start enables one UI-thread dispatcher timer; its first callback advances one
 fixed simulation step. Pause preserves the current world. Start resumes it.
 Reset stops playback and recreates the world from the selected controller and
-mutation settings with the same seed, at tick zero, ready to start.
+mutation and initial-predator settings with the same seed, at tick zero, ready to start.
 Closing stops and detaches the timer.
 
 Task 11d adds the toolbar choices `Rule-based (Task 9)` and
@@ -102,7 +102,7 @@ a successful Reset to recover. Reverting selections to the active configuration
 removes the pending difference. Trait coloring and resize never restart the run.
 
 Desktop forwards Core defaults through one explicit settings mapper, overriding
-only neural enable and birth-time mutation. Rule-based mode uses mutation 0;
+only neural enable, birth-time mutation and initial predator count. Rule-based mode uses mutation 0;
 Neural mode retains Core's actual positive initial-weight variation (currently
 0.5), including when birth-time mutation is 0. All other settings and the seed
 remain the same. Identical selections and Reset reproduce histories on the
@@ -168,6 +168,41 @@ Pause/resume, trait coloring and resize preserve selection.
 A brain is fixed during an organism's lifetime; weight mutation applies only to
 offspring. A repeated circular path can result from stable controller outputs
 rather than learning. Observed adaptation and population survival are not guaranteed.
+
+## Desktop predator–prey demonstration
+
+Task 12b3 adds the **Predators:** selector with exactly 0, 2, 5 and 10; startup
+selects 0. This is the initial predator count added to the default 20 herbivores,
+not the current living population. Changes remain pending alongside controller
+and mutation choices until Reset. Start, Pause, trait coloring, resizing and
+inspection use the active run. A successful Reset applies all effective choices,
+clears inspection and history, and stays paused at tick zero. Failed construction
+preserves the active run, inspection and pending choices for retry.
+
+Predators have a purple outline independent of their existing trait-gradient fill.
+Herbivores keep their original appearance; gold remains reserved for selection
+and sampled trajectories. The adjacent legend identifies both species, green
+food and gold inspection cues without drawing over the world. Outline strokes
+are scaled and bounded to 1.5–3 device pixels; geometry and hit testing are unchanged.
+Toolbar labels stay with their selectors, and wrapping readouts remain visible
+at the 600×500 minimum window size. The existing inspector still scrolls.
+
+Live readouts show **Herbivores**, **Predators** and cumulative **Predation** from
+one committed statistics snapshot, alongside tick, total organisms, food, trait
+mean/deviation, births and deaths. The active **Initial predators** readout is a
+configuration value; living counts can change through births and deaths.
+
+Rule-based and neural modes and the existing inspector remain available. The
+explicit mapper forwards all 42 Core settings, overriding only controller enable,
+effective birth-time neural mutation and initial predator count. Predator energy
+remains 100 and the prey-energy transfer ratio remains 0.8. All other fields,
+including the seed and initial neural variation, retain Core defaults.
+
+Pursuit, attacks and consumption are produced solely by Core. Identical effective
+settings and seed reproduce runs on the supported runtime; UI events and rendering
+add no RNG draws. Captures within a particular horizon, predator survival,
+population coexistence and adaptive success are not guaranteed. Species-specific
+traits, prey evasion and ecological tuning remain deferred to later work.
 
 ## Population Statistics
 
@@ -386,7 +421,7 @@ and subsequent ticks on the supported runtime. Observer configuration and diagno
 publication remain atomic; Task 12b1 adds the sensed `TargetKind` to
 `OrganismDiagnosticSample`. Species is still resolved from the world. Desktop defaults
 remain herbivore-only, and controls, inspector, trajectory and pending/active
-semantics are unchanged. Species visualization is deferred.
+semantics are unchanged. Task 12b3 adds a predator outline and demonstration selector.
 
 The independent mixed initialization reference and generated fixture are stored
 under `tests/EvoWorld.Tests/Fixtures/`. Reproduce the fixture from the repository root:
@@ -441,8 +476,8 @@ remain reproducible on the supported runtime. Task 12b1 introduced pursuit alone
 Task 12b2 adds contact consumption as described below. Prey evasion,
 species-specific traits and further ecological behavior remain deferred.
 
-Desktop and its inspector are unchanged; TargetKind is available through Core
-telemetry. Independent scalar input/output and herbivore regression oracles are in
+Task 12b1 left Desktop and its inspector unchanged; TargetKind is available through
+Core telemetry. Independent scalar input/output and herbivore regression oracles are in
 `tests/EvoWorld.Tests/Fixtures/PredatorInputReference.cs` and
 `tests/EvoWorld.Tests/Fixtures/HerbivorePursuitReference.cs`; no external tooling is
 needed to reproduce these calculations.
@@ -483,7 +518,8 @@ mode, while retaining the original neural commands and sensed `TargetKind`.
 No attack means null outcomes. A tracked prey captured before acting reports
 DidAct=false; one captured after acting retains its own same-tick commands.
 The inspector determines death from the committed world and freezes its history.
-Attack outcomes are exposed through Core; Desktop controls and rendering are unchanged.
+Attack outcomes are exposed through Core; Task 12b3 makes initial predator choices,
+species outlines and live counts visible without changing these Core mechanics.
 
 `TotalPredationEvents` is a checked cumulative long counter, incremented once per
 capture and retained after extinction. `TotalDeaths` still counts each disappearance
@@ -898,6 +934,8 @@ Task 12b1 adds snapshot-based prey detection and pursuit, herbivore-only food
 pickup, and executing-tick TargetKind diagnostics.
 Task 12b2 adds sequential contact consumption, snapshot-based prey energy transfer,
 atomic predation counters and nullable executing-tick attack outcomes.
+Task 12b3 adds Desktop predator choices with pending Reset semantics, purple
+predator outlines, a legend, and live species and cumulative predation counts.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 

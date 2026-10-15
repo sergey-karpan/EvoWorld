@@ -7,13 +7,20 @@ internal static class TargetSensing
 {
     internal static SensedTarget Resolve(Organism organism, IReadOnlyList<Food> food, bool[] consumed,
         IReadOnlyList<Organism> previousOrganisms)
+        => Resolve(organism, food, consumed, previousOrganisms, out _);
+
+    internal static SensedTarget Resolve(Organism organism, IReadOnlyList<Food> food, bool[] consumed,
+        IReadOnlyList<Organism> previousOrganisms, out int? targetId)
     {
+        targetId = null;
         if (organism.SensingRadius == 0) return default;
         var radius = FoodDistance.FromLength(organism.SensingRadius);
         if (organism.Species == Species.Herbivore)
         {
             var selected = FoodSeeking.FindNearest(organism.X, organism.Y, food, consumed, radius);
-            return selected < 0 ? default : new(TargetKind.Food, food[selected].X, food[selected].Y);
+            if (selected < 0) return default;
+            targetId = food[selected].Id;
+            return new(TargetKind.Food, food[selected].X, food[selected].Y);
         }
 
         var nearest = -1;
@@ -33,6 +40,8 @@ internal static class TargetSensing
                 nearestDistance = distance;
             }
         }
-        return nearest < 0 ? default : new(TargetKind.Prey, previousOrganisms[nearest].X, previousOrganisms[nearest].Y);
+        if (nearest < 0) return default;
+        targetId = previousOrganisms[nearest].Id;
+        return new(TargetKind.Prey, previousOrganisms[nearest].X, previousOrganisms[nearest].Y);
     }
 }

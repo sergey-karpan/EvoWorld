@@ -23,6 +23,14 @@ internal static class NeuralControl
         SensedTarget target, SimulationSettings settings, int trackedOrganismId, long tickCount,
         ref OrganismDiagnosticSample? diagnosticSample)
     {
+        OrganismResearchSample? ignored = null;
+        return Evaluate(organism, energy, target, settings, trackedOrganismId, tickCount, ref diagnosticSample, false, ref ignored);
+    }
+
+    internal static (double Heading, double EffectiveSpeed) Evaluate(Organism organism, double energy,
+        SensedTarget target, SimulationSettings settings, int trackedOrganismId, long tickCount,
+        ref OrganismDiagnosticSample? diagnosticSample, bool captureResearch, ref OrganismResearchSample? researchSample)
+    {
         Span<double> inputs = stackalloc double[NeuralGenome.InputCount];
         Span<double> outputs = stackalloc double[NeuralGenome.OutputCount];
         EncodeInputs(organism, energy, target, settings, inputs);
@@ -41,8 +49,16 @@ internal static class NeuralControl
         var rotation = outputs[0] * limit;
         var heading = rotation == 0 ? organism.HeadingRadians : FoodSeeking.Normalize(organism.HeadingRadians + rotation);
         if (organism.Id == trackedOrganismId)
+        {
             diagnosticSample = new(organism.Id, tickCount, true, true,
                 outputs[0], outputs[1], rotation, effectiveSpeed, target.Kind);
+            if (captureResearch && researchSample is not null)
+                researchSample = researchSample with
+                {
+                    Inputs = new(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]),
+                    Outputs = new(outputs[0], outputs[1]), AppliedRotation = rotation
+                };
+        }
         return (heading, effectiveSpeed);
     }
 

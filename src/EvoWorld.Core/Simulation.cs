@@ -8,6 +8,7 @@ public sealed class Simulation
     private sealed record Advancement(SimulationState State, Pcg32State Random, long NextFoodId, long NextOrganismId,
         OrganismDiagnosticSample? DiagnosticSample, long TotalPredationEvents = 0)
     {
+        public OrganismResearchSample? ResearchSample { get; init; }
         // Retain the historical four-argument shape used by transaction regression probes.
         public Advancement(SimulationState state, Pcg32State random, long nextFoodId, long nextOrganismId)
             : this(state, random, nextFoodId, nextOrganismId, null) { }
@@ -18,6 +19,21 @@ public sealed class Simulation
     // Observer configuration is independent of the committed world. Configuration changes
     // suppress the preceding sample until the next successful tick publishes a matching one.
     private long _diagnosticsEnabledAtTick;
+    private bool _captureResearchTrace;
+    private long _researchEnabledAtTick;
+    internal bool CaptureResearchTrace
+    {
+        get => _captureResearchTrace;
+        set
+        {
+            if (_captureResearchTrace == value) return;
+            _captureResearchTrace = value;
+            _researchEnabledAtTick = TickCount;
+        }
+    }
+    internal OrganismResearchSample? LastResearchSample => _captureResearchTrace
+        && _advancement.ResearchSample is { } sample && sample.OrganismId == _trackedOrganismId
+        && sample.TickCount > _diagnosticsEnabledAtTick && sample.TickCount > _researchEnabledAtTick ? sample : null;
     public OrganismDiagnosticSample? LastDiagnosticSample
     {
         get
@@ -134,6 +150,7 @@ public sealed class Simulation
         var previous = previousAdvancement.State;
         var nextTick = checked(previous.TickCount + 1);
         OrganismDiagnosticSample? diagnosticSample = null;
+        OrganismResearchSample? researchSample = null;
 
         var survivors = new List<Organism>(previous.World.Organisms.Count);
         var foodItems = previous.World.FoodItems;
@@ -144,20 +161,38 @@ public sealed class Simulation
         var predationEvents = previousAdvancement.TotalPredationEvents;
         for (var index = 0; index < previous.World.Organisms.Count; index++)
         {
+            var researching = CaptureResearchTrace && previous.World.Organisms[index].Id == _trackedOrganismId;
+            if (researching)
+            {
+                var tracked = previous.World.Organisms[index];
+                researchSample = new(tracked.Id, nextTick, false)
+                {
+                    Status = captured[index] ? "CapturedBeforeAction" : "MetabolicDeath", ParentId = tracked.ParentId,
+                    BeforeX = tracked.X, BeforeY = tracked.Y, BeforeHeading = tracked.HeadingRadians,
+                    EnergyBeforeDrain = tracked.Energy, SteeringRate = tracked.SteeringRate, InheritedSpeed = tracked.Speed
+                };
+            }
             if (captured[index]) continue; // No action, drain, or commands after capture.
             var organism = previous.World.Organisms[index];
             var energyCost = organism.Metabolism * Settings.TickDurationSeconds;
             if (!double.IsFinite(energyCost)) throw new OverflowException("Energy cost must be finite.");
             var energy = organism.Energy - energyCost;
+            if (researching) researchSample = researchSample! with { PostDrainEnergy = energy };
             if (!double.IsFinite(energy))
                 throw new OverflowException("Organism energy after drain must be finite.");
             if (energy <= 0.0) continue; // Death precedes movement and feeding.
 
-            var target = TargetSensing.Resolve(organism, foodItems, consumed, previous.World.Organisms);
+            var target = TargetSensing.Resolve(organism, foodItems, consumed, previous.World.Organisms, out var targetId);
+            if (researching) researchSample = researchSample! with
+            {
+                DidAct = true, Status = "ActedCaptured", TargetKind = target.Kind, TargetId = targetId,
+                TargetX = target.Kind == TargetKind.None ? null : target.X,
+                TargetY = target.Kind == TargetKind.None ? null : target.Y
+            };
             double heading, effectiveSpeed;
             if (Settings.EnableNeuralControl)
                 (heading, effectiveSpeed) = NeuralControl.Evaluate(organism, energy, target,
-                    Settings, _trackedOrganismId, nextTick, ref diagnosticSample);
+                    Settings, _trackedOrganismId, nextTick, ref diagnosticSample, CaptureResearchTrace, ref researchSample);
             else
             {
                 heading = FoodSeeking.Steer(organism, target, Settings.TickDurationSeconds);
@@ -167,6 +202,7 @@ public sealed class Simulation
             }
             if (FailSteeringForOrganismIdForTesting == organism.Id)
                 throw new InvalidOperationException("Injected steering failure.");
+            if (researching) researchSample = researchSample! with { CommandedHeading = heading, EffectiveSpeed = effectiveSpeed };
             var distance = effectiveSpeed * Settings.TickDurationSeconds;
             if (!double.IsFinite(distance))
                 throw new OverflowException("Movement distance must be finite.");
@@ -179,6 +215,11 @@ public sealed class Simulation
                 heading = Normalize(Math.PI - heading);
             else if (y.Reflected)
                 heading = Normalize(-heading);
+            if (researching) researchSample = researchSample! with
+            {
+                MovedX = x.Position, MovedY = y.Position, MovedHeading = heading,
+                ReflectedX = x.Reflected, ReflectedY = y.Reflected, FoodPickedUp = false
+            };
             var selected = organism.Species == Species.Herbivore
                 ? FoodSeeking.FindNearest(x.Position, y.Position, foodItems, consumed, radius) : -1;
             if (selected >= 0)
@@ -187,6 +228,10 @@ public sealed class Simulation
                 if (!double.IsFinite(energy))
                     throw new OverflowException("Organism energy after feeding must be finite.");
                 consumed[selected] = true;
+                if (researching) researchSample = researchSample! with
+                {
+                    FoodPickedUp = true, FoodId = foodItems[selected].Id, FoodEnergy = foodItems[selected].Energy
+                };
             }
             if (organism.Species == Species.Predator && Settings.FoodPickupRadius > 0)
             {
@@ -276,15 +321,29 @@ public sealed class Simulation
             survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
                 parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain, parent.Species, parent.ParentId);
             nextOrganismId++;
+            if (CaptureResearchTrace && parent.Id == _trackedOrganismId && researchSample is not null)
+                researchSample = researchSample with { BirthsThisTick = checked(researchSample.BirthsThisTick + 1) };
         }
         survivors.AddRange(offspring); // Newborns first act next tick; IDs exceed all surviving parent IDs.
         nextRandom = random?.CaptureState() ?? nextRandom;
         var world = new WorldState(Settings.WorldWidth, Settings.WorldHeight,
             FailWorldConstructionForTesting ? null! : survivors, remainingFood);
         var next = new SimulationState(world, nextTick);
+        if (CaptureResearchTrace && _trackedOrganismId >= 0)
+        {
+            researchSample ??= new(_trackedOrganismId, nextTick, false);
+            var committed = world.Organisms.FirstOrDefault(o => o.Id == _trackedOrganismId);
+            if (committed is not null)
+                researchSample = researchSample with
+                {
+                    Status = researchSample.DidAct ? "ActedSurvived" : "Newborn", ParentId = committed.ParentId,
+                    AliveAfterTick = true, CommittedX = committed.X, CommittedY = committed.Y,
+                    CommittedHeading = committed.HeadingRadians, EnergyAfterTick = committed.Energy
+                };
+        }
         if (_trackedOrganismId >= 0 && diagnosticSample is null)
             diagnosticSample = new(_trackedOrganismId, nextTick, false, Settings.EnableNeuralControl);
-        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId, diagnosticSample, predationEvents);
+        var advancement = new Advancement(next, nextRandom, nextId, nextOrganismId, diagnosticSample, predationEvents) { ResearchSample = researchSample };
         _advancement = advancement; // Sole commit: world, RNG, IDs, diagnostics, and predation history.
     }
 

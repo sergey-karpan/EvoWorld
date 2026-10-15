@@ -933,6 +933,224 @@ omitted from lineage CSV; population-history CSV retains it and its unchanged
 lifetime turning metrics, phenotype–fitness correlations or per-individual feeding
 success. Per-organism food-pickup counters and full Task 12c remain deferred.
 
+## Energy-Dependent Behavior Research
+
+Task 12c-mini2 provides a test-side research probe for organism **#36** in the
+Seed 42 / Neural / birth mutation 0.1 / initial predators 5 experiment. It compares
+an unobserved reference replay with a research-enabled replay, records executing
+controller facts, and evaluates energy-only counterfactuals with the organism's
+fixed genome. This is an explicit analysis workflow, not a Desktop control,
+learning mechanism, general persistence format or ecological intervention.
+
+### Internal diagnostic API
+
+Core's `Simulation.CaptureResearchTrace` and `Simulation.LastResearchSample` are
+**internal**, available to the existing friend test assembly. Capture is disabled
+by default and uses the same organism ID as the existing public diagnostics:
+
+```csharp
+simulation.EnableDiagnosticsFor(36);
+simulation.CaptureResearchTrace = true;
+simulation.AdvanceTick();
+OrganismResearchSample? sample = simulation.LastResearchSample;
+
+simulation.CaptureResearchTrace = false; // Disable research capture only.
+// simulation.DisableDiagnostics();     // Also clear the shared tracked ID.
+```
+
+Read after a successfully committed tick. Core retains only the latest immutable
+scalar sample; the test harness retains the longer trace. Enabling capture or
+changing the tracked ID does not expose a stale preceding sample. When research
+capture is disabled or no ID is tracked, the getter returns null. Failed ticks
+preserve the previous committed sample along with world, RNG, IDs and existing
+diagnostics. Capture consumes no RNG and performs no second live neural evaluation.
+
+### Captured facts and tick timing
+
+`TickCount` identifies the executing tick's completed transaction, not a paint or
+wall-clock observation. The pipeline timing is:
+
+1. `BeforeX`, `BeforeY`, `BeforeHeading` and `EnergyBeforeDrain` come from the
+   previous committed organism. Earlier-ID actions can already have consumed food
+   or captured the tracked organism before its turn.
+2. `PostDrainEnergy` is energy after this tick's metabolic drain, before control,
+   feeding and reproduction. Nonpositive energy prevents action. A capture before
+   action prevents even this organism's drain, leaving that value unavailable.
+3. Target kind, ID and coordinates come from the **same resolver invocation**
+   used for control, respecting the current consumed-food mask and snapshot-based
+   prey sensing. No target is selected again for the trace.
+4. Six inputs and two outputs are copied from the actual executing
+   `NeuralControl.Evaluate` buffers. Input 0/1 are sine/cosine of relative target
+   bearing, input 2 is normalized target proximity, input 3 is
+   `2 * min(PostDrainEnergy / 100, 1) - 1`, input 4 is normalized inherited speed,
+   and input 5 is normalized nearest-wall proximity. Without a sensed target,
+   channels 0/1/2 are `0, 1, -1`. Outputs 0/1 control steering and speed modulation.
+5. `AppliedRotation` and `CommandedHeading` precede movement and reflection.
+   `EffectiveSpeed` is the executing speed command. `MovedX`, `MovedY`,
+   `MovedHeading` and axis reflection flags describe the actual movement step.
+6. `FoodPickedUp`, `FoodId` and `FoodEnergy` are recorded only at the real
+   post-movement consumption branch. For an acting organism, false means no
+   pickup; unavailable/non-action feeding is null, not an inferred false.
+7. `BirthsThisTick` counts successful births by this organism in the actual
+   reproduction loop. `CommittedX/Y/Heading` and `EnergyAfterTick` describe the
+   final surviving organism, including feeding and reproduction energy cost.
+   They are null if it was removed, even if it acted earlier in the tick.
+
+Statuses distinguish `Absent`, `Newborn`, `MetabolicDeath`,
+`CapturedBeforeAction`, `ActedCaptured` and `ActedSurvived`. `DidAct = false` is
+different from a valid neural action producing zero outputs. Neural buffers and
+commands are unavailable for non-actions; Rule-based actions also have no neural
+buffers. `AliveAfterTick` independently records final snapshot membership.
+
+The research CSV derives `TargetDistance` with `Hypot` from the actual captured
+target coordinates; it is not a substitute target resolver or reconstructed neural
+input. `Displacement` and `PathTurn` are measured from adjacent movement positions.
+Physical path turning can differ from commanded steering at reflections.
+
+### Reproducing the experiment and probe
+
+The harness calls `ExperimentSettings.Create(new(ControllerMode.Neural, 0.1, 5))`:
+seed **42UL**, 20 initial herbivores plus five predators, initial neural weight
+variation **0.5**, and every other setting unchanged from the effective Desktop
+mapping. Its identity gate requires #36 to be a Herbivore with `ParentId = 9`,
+first appearing within ticks **2022–2032**; divergence fails instead of retuning.
+The verified replay reproduced birth **2027**, last alive tick **23629**,
+disappearance **23630**, and final predation count **24**. This reproducibility
+applies to matching source/runtime conditions, not arbitrary platforms or runtimes.
+
+From the repository root, after the normal restore/build prerequisites:
+
+```powershell
+dotnet build EvoWorld.sln --no-restore
+dotnet test EvoWorld.sln --no-build --filter "FullyQualifiedName~ReplayIdentityTests|FullyQualifiedName~NeuralInputTraceTests|FullyQualifiedName~ObservationNeutralityTests|FullyQualifiedName~FrozenGenomeCounterfactualTests"
+
+$env:EVOWORLD_RESEARCH_OUTPUT = Join-Path (Get-Location) 'artifacts/Task12c-mini2'
+dotnet test EvoWorld.sln --no-build --filter "FullyQualifiedName~ExportResearchArtifactsOnlyWhenExplicitlyRequested"
+Remove-Item Env:EVOWORLD_RESEARCH_OUTPUT
+```
+
+Ordinary test runs do not export files unless `EVOWORLD_RESEARCH_OUTPUT` is set.
+The output directory is explicit; `artifacts/` is ignored by the repository's
+existing rules. The default trace covers the full lifespan, including newborn
+and disappearance ticks. A manual inclusive override is available:
+`$env:EVOWORLD_RESEARCH_TICK_RANGE = '10000:14000'` before the export test.
+It limits exported trace rows only; full replay and counterfactual context
+selection still run. Metadata reports the actual exported bounds and deliberate
+omissions. Remove the override with `Remove-Item Env:EVOWORLD_RESEARCH_TICK_RANGE`
+to restore full output. Invalid ranges fail rather than silently truncating.
+
+The paired reference/research replay compares exact state digests at every
+committed snapshot, including tick zero, with RNG state, IDs, parentage, genomes,
+food and counters. Separate tests preserve existing public diagnostic commands,
+verify rollback, and check captured vectors offline against `NeuralGenome.Forward`.
+The full probe is limited to 30 minutes and each CSV to 50,000,000 bytes. CSV
+publication follows completed replay/calculation and uses the existing atomic
+temporary-sibling writer, UTF-8 BOM `EF BB BF`, CRLF, invariant round-trip numbers
+and blank nullable values. The historical 66-column population-history and
+15-column lineage exports are unchanged.
+
+When the generated research companion `artifacts/Task12c-mini2/analyze_trace.py`
+is available, `python artifacts/Task12c-mini2/analyze_trace.py` rebuilds
+`analysis.md` from the CSVs using Python's standard library. It verifies the genome
+digest and requires the default full-lifespan trace. This companion and generated
+reports are research artifacts in the ignored output directory, not product UI
+features or automatically generated by ordinary tests.
+
+### Research CSV schemas
+
+The probe emits seven separate research files. Their dedicated headers are
+defined in `ReplayIdentityTests.cs` and `FrozenGenomeCounterfactualTests.cs`;
+the principal schema/order contracts have automated coverage. Field order is:
+
+**`organism36-trace.csv` — one observed committed tick per row (48 columns):**
+
+```text
+Seed,OrganismId,ParentId,Tick,Status,DidAct,AliveAfterTick,BeforeX,BeforeY,BeforeHeading,EnergyBeforeDrain,PostDrainEnergy,Input0,Input1,Input2,Input3,Input4,Input5,Output0,Output1,TargetKind,TargetId,TargetX,TargetY,TargetDistance,AppliedRotation,EffectiveSpeed,CommandedHeading,MovedX,MovedY,MovedHeading,ReflectedX,ReflectedY,Displacement,PathTurn,CommittedX,CommittedY,CommittedHeading,EnergyAfterTick,FoodPickedUp,FoodId,FoodEnergy,BirthsThisTick,Population,Herbivores,FoodCount,PredationCount,GenomeSha256
+```
+
+**`energy-counterfactual.csv` — frozen-context single-step commands:**
+
+```text
+ContextTick,Stratum,ObservedPostDrainEnergy,Energy,Input0,Input1,Input2,Input3,Input4,Input5,Output0,Output1,PredictedRotation,PredictedEffectiveSpeed,GenomeSha256
+```
+
+**`sensitivity.csv` — one output's sensitivity per measured context:**
+
+```text
+ContextTick,Stratum,ObservedPostDrainEnergy,Output,MaxAbsDeltaOutput,MinDeltaOutputPerUnitEnergy,MaxDeltaOutputPerUnitEnergy,SignChangeCount
+```
+
+**`alternative-channel-contrasts.csv` — energy held fixed:**
+
+```text
+BaseTick,DonorTick,ChangedChannels,FixedInput3,BaseOutput0,ContrastOutput0,DeltaOutput0,BaseOutput1,ContrastOutput1,DeltaOutput1
+```
+
+**`transition-contrasts.csv` — selective changes around the first positive steering:**
+
+```text
+BaseTick,TransitionTick,Intervention,Input0,Input1,Input2,Input3,Input4,Input5,Output0,Output1,DeltaOutput0FromBase,ActualTransitionOutput0
+```
+
+**`genome36.csv` — all 74 parameters:**
+
+```text
+ParameterIndex,Float64BitsHex,RoundTripValue
+```
+
+**`run-metadata.csv` — identity, coverage, settings and execution provenance:**
+
+```text
+Key,Value
+```
+
+The genome digest is SHA-256 of all 74 IEEE-754 parameter bit patterns in order,
+serialized as little-endian Int64 bytes. Metadata records the assembly's base
+source revision, authorized uncommitted-source status, runtime, all 42 effective
+settings, replay timings, identity and exported range. An informational-version
+commit suffix does not imply a clean source tree.
+
+### Frozen-genome methodology and interpretation
+
+The probe copies #36's actual genome from its first committed alive snapshot and
+verifies it remains unchanged. It selects nine genuine contexts near energies
+100/50/20 across temporal thirds, plus available first-energy-at-most-30,
+first-positive-steering and first-reflection anchors. Temporal thirds are coverage
+strata, not asserted loop/escape/return phases. Missing natural energy coverage is
+reported rather than fabricated.
+
+For each context, channels **0, 1, 2, 4 and 5** are frozen bit-for-bit. Only
+channel 3 varies, using the production energy encoder for energies
+0, 10, 20, 30, 40, 50, 70, 100, 130 and the actual observed energy, with duplicates
+removed. Each case makes exactly one **offline** `Forward` call with reused
+buffers. The row where `Energy == ObservedPostDrainEnergy` contains the genuine
+measured vector. Energies 100 and 130 both clamp to input3=1; these cases cannot be
+distinguished by that channel. Zero-energy cases are offline evaluations, not
+execution of organisms that should die before acting.
+
+Sensitivity reports the maximum pairwise output difference, signed adjacent-case
+slopes per raw energy unit (minimum/maximum for non-monotonic curves), and sign
+changes excluding exact zeros, for both outputs. Supplementary contrasts hold
+input3 fixed while changing measured food-bearing/proximity channels 0–2 or wall
+channel 5. These synthetic vectors are finite network experiments, not alternative
+ecological trajectories. Predicted rotation and speed use the measured context's
+steering limit, inherited speed and production timestep/modulation.
+
+The completed analysis supports energy sensitivity and quantitatively explains
+some gradual changes in unchanged no-target/interior contexts. It only partially
+supports energy as an explanation of the sharper observed change: in the selected
+tick 12211-to-12899 contrast, energy-only variation accounts for about 0.91% of the
+steering-output difference, while food-bearing/proximity changes are much larger.
+That ratio is not an additive causal attribution. Wall reflections further affect
+later paths; the exact earlier screenshot transition cannot be uniquely aligned.
+
+**Energy sensitivity is not proof of learning, adaptation or survival causality.**
+The genome is fixed during life; observed feeding and reproduction do not show
+that the energy response caused survival. No sharp threshold at energy 30, hunger
+awareness, inherited circle phenotype or fitness advantage is established. Full
+Task 12c, multi-seed heritability/fitness analysis and causal ecological
+interventions remain deferred.
+
 ## Individual Traits and Mutation
 
 Each immutable organism has finite, nonnegative Speed and Metabolism. Movement

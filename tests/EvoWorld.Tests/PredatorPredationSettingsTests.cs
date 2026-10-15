@@ -36,7 +36,7 @@ public sealed class PredatorPredationSettingsTests
     public void AllElevenHistoricalSignaturesRemainAndDefaultRatioIsPointEight()
     {
         var defaults = SimulationSettings.CreateDefault();
-        var constructors = typeof(SimulationSettings).GetConstructors();
+        var constructors = typeof(SimulationSettings).GetConstructors().Where(c => c.GetParameters().Length <= 42).ToArray();
         Assert.Equal(new[] { 4, 6, 7, 9, 11, 15, 23, 33, 38, 39, 41, 42 }, constructors.Select(c => c.GetParameters().Length).Order());
         Assert.Equal(0.8, defaults.PredationEnergyTransferRatio);
         foreach (var constructor in constructors.Where(c => c.GetParameters().Length <= 41))
@@ -55,6 +55,11 @@ public sealed class PredatorPredationSettingsTests
     {
         Dictionary<string, object> expected = new()
         {
+            ["OrganismAttackRadius"] = 8.0, ["OrganismAttackEfficiency"] = 1.0,
+            ["MinAttackRadius"] = 0.0, ["MaxAttackRadius"] = 50.0,
+            ["MinAttackEfficiency"] = 0.0, ["MaxAttackEfficiency"] = 1.0,
+            ["InitialAttackRadiusVariationAmplitude"] = 0.0, ["InitialAttackEfficiencyVariationAmplitude"] = 0.0,
+            ["AttackRadiusMutationAmplitude"] = 1.0, ["AttackEfficiencyMutationAmplitude"] = 0.05,
             ["Seed"] = 91UL, ["TickDurationSeconds"] = 0.25, ["WorldWidth"] = 120.0, ["WorldHeight"] = 90.0,
             ["InitialOrganismCount"] = 3, ["InitialFoodCount"] = 7, ["OrganismSpeed"] = 12.0,
             ["OrganismEnergyDrainPerSecond"] = 2.0, ["FoodPickupRadius"] = 9.0,

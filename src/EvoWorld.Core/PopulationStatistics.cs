@@ -15,6 +15,8 @@ public readonly record struct PopulationStatistics
     public TraitStatistics Metabolism { get; }
     public TraitStatistics SensingRadius { get; }
     public TraitStatistics SteeringRate { get; }
+    public TraitStatistics AttackRadius { get; }
+    public TraitStatistics AttackEfficiency { get; }
 
     internal PopulationStatistics(SimulationState state, long births, long deaths)
         : this(state, births, deaths, 0) { }
@@ -43,5 +45,7 @@ public readonly record struct PopulationStatistics
         Metabolism = TraitStatistics.Calculate(organisms, static o => o.Metabolism);
         SensingRadius = TraitStatistics.Calculate(organisms, static o => o.SensingRadius);
         SteeringRate = TraitStatistics.Calculate(organisms, static o => o.SteeringRate);
+        AttackRadius = TraitStatistics.Calculate(organisms, static o => o.AttackRadius);
+        AttackEfficiency = TraitStatistics.Calculate(organisms, static o => o.AttackEfficiency);
     }
 }

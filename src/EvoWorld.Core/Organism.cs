@@ -16,6 +16,8 @@ public sealed class Organism
     public NeuralGenome Brain { get; }
     public Species Species { get; }
     public int? ParentId { get; }
+    public double AttackRadius { get; }
+    public double AttackEfficiency { get; }
 
     internal Organism(int id, double x, double y, double headingRadians, double energy)
         : this(id, x, y, headingRadians, energy, 50, 1)
@@ -47,7 +49,17 @@ public sealed class Organism
 
     internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
         double sensingRadius, double steeringRate, NeuralGenome brain, Species species, int? parentId)
+        : this(id, x, y, headingRadians, energy, speed, metabolism, sensingRadius, steeringRate, brain, species, parentId, 8.0, 1.0)
     {
+    }
+
+    internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
+        double sensingRadius, double steeringRate, NeuralGenome brain, Species species, int? parentId,
+        double attackRadius, double attackEfficiency)
+    {
+        if (!double.IsFinite(attackRadius) || attackRadius < 0) throw new ArgumentOutOfRangeException(nameof(attackRadius));
+        if (!double.IsFinite(attackEfficiency) || attackEfficiency < 0 || attackEfficiency > 1)
+            throw new ArgumentOutOfRangeException(nameof(attackEfficiency));
         if (parentId is < 0 || (parentId.HasValue && parentId.Value == id))
             throw new ArgumentOutOfRangeException(nameof(parentId));
         if (species is not Species.Herbivore and not Species.Predator)
@@ -69,5 +81,7 @@ public sealed class Organism
         Brain = brain;
         Species = species;
         ParentId = parentId;
+        AttackRadius = attackRadius;
+        AttackEfficiency = attackEfficiency;
     }
 }

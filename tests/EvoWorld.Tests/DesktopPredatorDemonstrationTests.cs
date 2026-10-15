@@ -21,6 +21,11 @@ public sealed class DesktopPredatorDemonstrationTests
         var actual = ExperimentSettings.Create(options);
         Dictionary<string, object> expected = new()
         {
+            ["OrganismAttackRadius"] = 8.0, ["OrganismAttackEfficiency"] = 1.0,
+            ["MinAttackRadius"] = 0.0, ["MaxAttackRadius"] = 50.0,
+            ["MinAttackEfficiency"] = 0.0, ["MaxAttackEfficiency"] = 1.0,
+            ["InitialAttackRadiusVariationAmplitude"] = 0.0, ["InitialAttackEfficiencyVariationAmplitude"] = 0.0,
+            ["AttackRadiusMutationAmplitude"] = 1.0, ["AttackEfficiencyMutationAmplitude"] = 0.05,
             ["Seed"] = 42UL, ["TickDurationSeconds"] = 1.0 / 30, ["WorldWidth"] = 1000.0, ["WorldHeight"] = 700.0,
             ["InitialOrganismCount"] = 20, ["InitialFoodCount"] = 100, ["OrganismSpeed"] = 50.0,
             ["OrganismEnergyDrainPerSecond"] = 1.0, ["FoodPickupRadius"] = 8.0,
@@ -39,7 +44,7 @@ public sealed class DesktopPredatorDemonstrationTests
             ["InitialPredatorCount"] = predators, ["InitialPredatorEnergy"] = 100.0, ["PredationEnergyTransferRatio"] = 0.8
         };
         var properties = typeof(SimulationSettings).GetProperties();
-        Assert.Equal(42, properties.Length); Assert.Equal(expected.Keys.Order(), properties.Select(p => p.Name).Order());
+        Assert.Equal(52, properties.Length); Assert.Equal(expected.Keys.Order(), properties.Select(p => p.Name).Order());
         var baseline = SimulationSettings.CreateDefault();
         foreach (var property in properties)
         {

@@ -29,6 +29,11 @@ public sealed class PredatorSettingsTests
         var actual = PredatorFixture.Settings(predators: 3, energy: 175, neural: true, oldVariation: true, newVariation: true);
         Dictionary<string, object> expected = new()
         {
+            ["OrganismAttackRadius"] = 8.0, ["OrganismAttackEfficiency"] = 1.0,
+            ["MinAttackRadius"] = 0.0, ["MaxAttackRadius"] = 50.0,
+            ["MinAttackEfficiency"] = 0.0, ["MaxAttackEfficiency"] = 1.0,
+            ["InitialAttackRadiusVariationAmplitude"] = 0.0, ["InitialAttackEfficiencyVariationAmplitude"] = 0.0,
+            ["AttackRadiusMutationAmplitude"] = 1.0, ["AttackEfficiencyMutationAmplitude"] = 0.05,
             ["Seed"] = 42UL, ["TickDurationSeconds"] = 0.1, ["WorldWidth"] = 100.0, ["WorldHeight"] = 80.0,
             ["InitialOrganismCount"] = 1, ["InitialFoodCount"] = 1, ["OrganismSpeed"] = 10.0,
             ["OrganismEnergyDrainPerSecond"] = 1.0, ["FoodPickupRadius"] = 8.0,

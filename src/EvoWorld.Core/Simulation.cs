@@ -261,7 +261,8 @@ public sealed class Simulation
                 }
             }
             survivors.Add(new Organism(organism.Id, x.Position, y.Position, heading, energy,
-                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain, organism.Species, organism.ParentId));
+                organism.Speed, organism.Metabolism, organism.SensingRadius, organism.SteeringRate, organism.Brain, organism.Species, organism.ParentId,
+                organism.AttackRadius, organism.AttackEfficiency));
         }
 
         var remainingFood = new List<Food>(foodItems.Count);
@@ -317,9 +318,11 @@ public sealed class Simulation
                     Settings.NeuralWeightMin, Settings.NeuralWeightMax, random)
                 : parent.Brain;
             offspring.Add(new Organism(id, childX, childY, childHeading, Settings.OffspringInitialEnergy,
-                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, childBrain, parent.Species, parent.Id));
+                FailOffspringTraitConstructionForTesting ? double.NaN : childSpeed, childMetabolism, childSensingRadius, childSteeringRate, childBrain, parent.Species, parent.Id,
+                parent.AttackRadius, parent.AttackEfficiency));
             survivors[index] = new Organism(parent.Id, parent.X, parent.Y, parent.HeadingRadians, parentEnergy,
-                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain, parent.Species, parent.ParentId);
+                parent.Speed, parent.Metabolism, parent.SensingRadius, parent.SteeringRate, parent.Brain, parent.Species, parent.ParentId,
+                parent.AttackRadius, parent.AttackEfficiency);
             nextOrganismId++;
             if (CaptureResearchTrace && parent.Id == _trackedOrganismId && researchSample is not null)
                 researchSample = researchSample with { BirthsThisTick = checked(researchSample.BirthsThisTick + 1) };

@@ -3,6 +3,16 @@ namespace EvoWorld.Core;
 /// <summary>Immutable configuration for one simulation run.</summary>
 public sealed class SimulationSettings
 {
+    public double OrganismAttackRadius { get; }
+    public double OrganismAttackEfficiency { get; }
+    public double MinAttackRadius { get; }
+    public double MaxAttackRadius { get; }
+    public double MinAttackEfficiency { get; }
+    public double MaxAttackEfficiency { get; }
+    public double InitialAttackRadiusVariationAmplitude { get; }
+    public double InitialAttackEfficiencyVariationAmplitude { get; }
+    public double AttackRadiusMutationAmplitude { get; }
+    public double AttackEfficiencyMutationAmplitude { get; }
     private const int DefaultOrganismCount = 20;
     private const int DefaultFoodCount = 100;
     private const double DefaultOrganismSpeed = 50.0;
@@ -247,7 +257,61 @@ public sealed class SimulationSettings
         double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
         double neuralWeightMutationAmplitude, int initialPredatorCount, double initialPredatorEnergy,
         double predationEnergyTransferRatio)
+        : this(seed, tickDurationSeconds, worldWidth, worldHeight,
+            initialOrganismCount, initialFoodCount, organismSpeed, organismEnergyDrainPerSecond,
+            foodPickupRadius, foodRegenerationIntervalSeconds, maxFoodCount, reproductionEnergyThreshold,
+            reproductionEnergyCost, offspringInitialEnergy, maxOrganismCount, initialSpeedVariationAmplitude,
+            initialMetabolismVariationAmplitude, minSpeed, maxSpeed, minMetabolism, maxMetabolism,
+            speedMutationAmplitude, metabolismMutationAmplitude, organismSensingRadius, organismSteeringRate,
+            initialSensingRadiusVariationAmplitude, initialSteeringRateVariationAmplitude, minSensingRadius,
+            maxSensingRadius, minSteeringRate, maxSteeringRate, sensingRadiusMutationAmplitude,
+            steeringRateMutationAmplitude, enableNeuralControl, neuralWeightMin, neuralWeightMax,
+            initialNeuralWeightVariationAmplitude, speedModulationAmplitude, neuralWeightMutationAmplitude,
+            initialPredatorCount, initialPredatorEnergy, predationEnergyTransferRatio,
+            8.0, 1.0, 0.0, 50.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.05)
     {
+    }
+
+    public SimulationSettings(ulong seed, double tickDurationSeconds, double worldWidth, double worldHeight,
+        int initialOrganismCount, int initialFoodCount, double organismSpeed,
+        double organismEnergyDrainPerSecond, double foodPickupRadius,
+        double foodRegenerationIntervalSeconds, int maxFoodCount,
+        double reproductionEnergyThreshold, double reproductionEnergyCost,
+        double offspringInitialEnergy, int maxOrganismCount,
+        double initialSpeedVariationAmplitude, double initialMetabolismVariationAmplitude,
+        double minSpeed, double maxSpeed, double minMetabolism, double maxMetabolism,
+        double speedMutationAmplitude, double metabolismMutationAmplitude,
+        double organismSensingRadius, double organismSteeringRate,
+        double initialSensingRadiusVariationAmplitude, double initialSteeringRateVariationAmplitude,
+        double minSensingRadius, double maxSensingRadius, double minSteeringRate, double maxSteeringRate,
+        double sensingRadiusMutationAmplitude, double steeringRateMutationAmplitude,
+        bool enableNeuralControl, double neuralWeightMin, double neuralWeightMax,
+        double initialNeuralWeightVariationAmplitude, double speedModulationAmplitude,
+        double neuralWeightMutationAmplitude, int initialPredatorCount, double initialPredatorEnergy,
+        double predationEnergyTransferRatio,
+        double organismAttackRadius, double organismAttackEfficiency, double minAttackRadius, double maxAttackRadius,
+        double minAttackEfficiency, double maxAttackEfficiency, double initialAttackRadiusVariationAmplitude,
+        double initialAttackEfficiencyVariationAmplitude, double attackRadiusMutationAmplitude, double attackEfficiencyMutationAmplitude)
+    {
+        ValidateNonnegativeFinite(organismAttackRadius, nameof(organismAttackRadius));
+        ValidateNonnegativeFinite(organismAttackEfficiency, nameof(organismAttackEfficiency));
+        if (organismAttackEfficiency > 1) throw new ArgumentOutOfRangeException(nameof(organismAttackEfficiency));
+        ValidateNonnegativeFinite(minAttackRadius, nameof(minAttackRadius));
+        ValidateNonnegativeFinite(maxAttackRadius, nameof(maxAttackRadius));
+        ValidateNonnegativeFinite(minAttackEfficiency, nameof(minAttackEfficiency));
+        ValidateNonnegativeFinite(maxAttackEfficiency, nameof(maxAttackEfficiency));
+        if (minAttackEfficiency > 1) throw new ArgumentOutOfRangeException(nameof(minAttackEfficiency));
+        if (maxAttackEfficiency > 1) throw new ArgumentOutOfRangeException(nameof(maxAttackEfficiency));
+        if (minAttackRadius >= maxAttackRadius) throw new ArgumentOutOfRangeException(nameof(maxAttackRadius));
+        if (minAttackEfficiency >= maxAttackEfficiency) throw new ArgumentOutOfRangeException(nameof(maxAttackEfficiency));
+        if (organismAttackRadius < minAttackRadius || organismAttackRadius > maxAttackRadius)
+            throw new ArgumentOutOfRangeException(nameof(organismAttackRadius));
+        if (organismAttackEfficiency < minAttackEfficiency || organismAttackEfficiency > maxAttackEfficiency)
+            throw new ArgumentOutOfRangeException(nameof(organismAttackEfficiency));
+        ValidateNonnegativeFinite(initialAttackRadiusVariationAmplitude, nameof(initialAttackRadiusVariationAmplitude));
+        ValidateNonnegativeFinite(initialAttackEfficiencyVariationAmplitude, nameof(initialAttackEfficiencyVariationAmplitude));
+        ValidateNonnegativeFinite(attackRadiusMutationAmplitude, nameof(attackRadiusMutationAmplitude));
+        ValidateNonnegativeFinite(attackEfficiencyMutationAmplitude, nameof(attackEfficiencyMutationAmplitude));
         if (!double.IsFinite(predationEnergyTransferRatio) || predationEnergyTransferRatio < 0 || predationEnergyTransferRatio > 1)
             throw new ArgumentOutOfRangeException(nameof(predationEnergyTransferRatio));
         ValidatePositiveFinite(tickDurationSeconds, nameof(tickDurationSeconds));
@@ -312,6 +376,16 @@ public sealed class SimulationSettings
         if (speedModulationAmplitude >= 1) throw new ArgumentOutOfRangeException(nameof(speedModulationAmplitude));
         ValidateNonnegativeFinite(neuralWeightMutationAmplitude, nameof(neuralWeightMutationAmplitude));
 
+        OrganismAttackRadius = organismAttackRadius;
+        OrganismAttackEfficiency = organismAttackEfficiency;
+        MinAttackRadius = minAttackRadius;
+        MaxAttackRadius = maxAttackRadius;
+        MinAttackEfficiency = minAttackEfficiency;
+        MaxAttackEfficiency = maxAttackEfficiency;
+        InitialAttackRadiusVariationAmplitude = initialAttackRadiusVariationAmplitude;
+        InitialAttackEfficiencyVariationAmplitude = initialAttackEfficiencyVariationAmplitude;
+        AttackRadiusMutationAmplitude = attackRadiusMutationAmplitude;
+        AttackEfficiencyMutationAmplitude = attackEfficiencyMutationAmplitude;
         Seed = seed;
         TickDurationSeconds = tickDurationSeconds;
         WorldWidth = worldWidth;

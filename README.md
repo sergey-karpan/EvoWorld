@@ -616,6 +616,91 @@ Species-specific traits, a separate `PredatorAttackRadius`, prey evasion,
 cooperative hunting and ecological tuning remain deferred. This is contact
 consumption, not a claim of full predator-prey dynamics or ecological coexistence.
 
+## Predator attack trait infrastructure (Task 12c1)
+
+All organisms now carry immutable `AttackRadius` (finite, nonnegative world units)
+and `AttackEfficiency` (finite multiplier in `[0,1]`). Legacy organism constructors
+default to **8.0** and **1.0**; an additive overload accepts explicit values.
+Custom-world values need not lie inside the configured production bounds.
+
+These traits are **not used by behavior yet**. Predators still attack using
+`FoodPickupRadius` and gain prey energy using `PredationEnergyTransferRatio`,
+without an efficiency multiplier. Task 12c2 will integrate the traits into attacks.
+The fixed compatibility defaults match current default attack settings, not every
+possible custom configuration; Task 12c2 must separately verify non-default cases.
+
+Adult replacements preserve both values. Every newborn inherits its specific
+parent's exact values, including valid custom values outside settings bounds,
+without clamping or additional RNG. The reserved attack-trait mutation amplitudes
+are stored and validated but deliberately **inactive until Task 12c2**. Existing
+trait and neural mutation behavior is unchanged.
+
+`SimulationSettings` preserves all historical constructors and adds a 52-argument
+overload, appending these ten settings after the original 42:
+
+| Setting | Default |
+|---|---:|
+| OrganismAttackRadius | 8.0 |
+| OrganismAttackEfficiency | 1.0 |
+| MinAttackRadius | 0.0 |
+| MaxAttackRadius | 50.0 |
+| MinAttackEfficiency | 0.0 |
+| MaxAttackEfficiency | 1.0 |
+| InitialAttackRadiusVariationAmplitude | 0.0 |
+| InitialAttackEfficiencyVariationAmplitude | 0.0 |
+| AttackRadiusMutationAmplitude | 1.0 (reserved) |
+| AttackEfficiencyMutationAmplitude | 0.05 (reserved) |
+
+All values must be finite and nonnegative; efficiency baselines/bounds are at most
+one. Each minimum must be strictly below its maximum, and each founder baseline
+must be inside its bounds. Amplitudes may be any finite nonnegative value.
+
+Initialization adds a fifth phase **after neural initialization**. If either new
+initial amplitude is positive, it consumes two PCG32 outputs per organism in
+ascending ID order: radius first, efficiency second, even when one amplitude is
+zero. It uses `baseline + (2 * (draw / 2^32) - 1) * amplitude`, clamped to the
+configured interval, with overflow-safe saturation before addition. A zero
+amplitude preserves the exact baseline. If both amplitudes are zero, founder
+baselines are assigned directly and the phase consumes **zero draws**.
+
+For `N = initial herbivores + initial predators`, `F = initial food`, and
+`B = 3N + 2F`, the full initialization draw matrix is:
+
+| Task 8 variation | Task 9 variation | Neural initialization | Attack variation | Draws |
+|---|---|---|---|---|
+| Off | Off | Off | Off | B |
+| On | Off | Off | Off | B + 2N |
+| Off | On | Off | Off | B + 2N |
+| On | On | Off | Off | B + 4N |
+| Off | Off | On | Off | B + 74N |
+| On | Off | On | Off | B + 76N |
+| Off | On | On | Off | B + 76N |
+| On | On | On | Off | B + 78N |
+| Off | Off | Off | On | B + 2N |
+| On | Off | Off | On | B + 4N |
+| Off | On | Off | On | B + 4N |
+| On | On | Off | On | B + 6N |
+| Off | Off | On | On | B + 76N |
+| On | Off | On | On | B + 78N |
+| Off | On | On | On | B + 78N |
+| On | On | On | On | B + 80N |
+
+Task 8/9 variation is on when either amplitude in that phase is positive. Neural
+initialization is on only when neural control is enabled and its initial weight
+amplitude is positive. Phases remain strictly ordered, not interleaved.
+
+`PopulationStatistics.AttackRadius` and `.AttackEfficiency` use the existing stable
+trait-statistics computation over **all living organisms**, including herbivores.
+Empty populations have zero-valued aggregates and count zero. The two aggregates
+participate in record equality; no counters were added.
+
+With attack initial variation disabled, all prior behavioral and RNG outcomes are
+preserved after projecting away the added fields. Enabled variation intentionally
+shifts later RNG positions by `2N`, so it does not promise pre-task trajectory
+equality. No diagnostic/research fields, population-history or lineage CSV columns,
+Desktop controls or rendering were changed. Birth-time attack mutation and the
+attack-behavior switch remain deferred to Task 12c2.
+
 ## Architecture Decisions
 
 PCG32, immutable configuration, world creation, fixed-step movement, survival,
@@ -1106,7 +1191,7 @@ Key,Value
 
 The genome digest is SHA-256 of all 74 IEEE-754 parameter bit patterns in order,
 serialized as little-endian Int64 bytes. Metadata records the assembly's base
-source revision, authorized uncommitted-source status, runtime, all 42 effective
+source revision, authorized uncommitted-source status, runtime, all effective
 settings, replay timings, identity and exported range. An informational-version
 commit suffix does not imply a clean source tree.
 

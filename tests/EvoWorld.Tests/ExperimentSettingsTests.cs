@@ -90,6 +90,16 @@ public class ExperimentSettingsTests
 
     private static Dictionary<string, object> ExpectedDefaults() => new()
     {
+        [nameof(SimulationSettings.OrganismAttackRadius)] = 8.0,
+        [nameof(SimulationSettings.OrganismAttackEfficiency)] = 1.0,
+        [nameof(SimulationSettings.MinAttackRadius)] = 0.0,
+        [nameof(SimulationSettings.MaxAttackRadius)] = 50.0,
+        [nameof(SimulationSettings.MinAttackEfficiency)] = 0.0,
+        [nameof(SimulationSettings.MaxAttackEfficiency)] = 1.0,
+        [nameof(SimulationSettings.InitialAttackRadiusVariationAmplitude)] = 0.0,
+        [nameof(SimulationSettings.InitialAttackEfficiencyVariationAmplitude)] = 0.0,
+        [nameof(SimulationSettings.AttackRadiusMutationAmplitude)] = 1.0,
+        [nameof(SimulationSettings.AttackEfficiencyMutationAmplitude)] = 0.05,
         [nameof(SimulationSettings.Seed)] = 42UL,
         [nameof(SimulationSettings.TickDurationSeconds)] = 1.0 / 30.0,
         [nameof(SimulationSettings.WorldWidth)] = 1000.0,

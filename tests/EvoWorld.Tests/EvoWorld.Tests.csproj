@@ -17,6 +17,9 @@
     <Compile Include="../../src/EvoWorld.Desktop/PopulationHistory.cs" Link="Desktop/PopulationHistory.cs" />
     <Compile Include="../../src/EvoWorld.Desktop/HistoryStatistics.cs" Link="Desktop/HistoryStatistics.cs" />
     <Compile Include="../../src/EvoWorld.Desktop/PopulationHistoryCsv.cs" Link="Desktop/PopulationHistoryCsv.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/LineageLedger.cs" Link="Desktop/LineageLedger.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/TrajectoryDescriptor.cs" Link="Desktop/TrajectoryDescriptor.cs" />
+    <Compile Include="../../src/EvoWorld.Desktop/LineageCsv.cs" Link="Desktop/LineageCsv.cs" />
     <ProjectReference Include="../../src/EvoWorld.Core/EvoWorld.Core.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">

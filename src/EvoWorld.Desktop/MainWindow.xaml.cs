@@ -121,6 +121,24 @@ public partial class MainWindow : Window
         InspectorScroll.MaxHeight = Math.Max(24, Math.Min(185, e.NewSize.Height * 0.45 - 16));
     }
 
+    private void LineageExport_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "CSV files (*.csv)|*.csv", DefaultExt = ".csv", FileName = "EvoWorld-lineage.csv" };
+        if (dialog.ShowDialog(this) == true) ExportLineageTo(dialog.FileName);
+    }
+
+    // Null represents dialog cancellation; capture only after an explicit destination.
+    internal void ExportLineageTo(string? path)
+    {
+        if (path is null) return;
+        try { LineageCsv.Export(path, _experiment.Lineage.Capture()); }
+        catch (Exception exception)
+        {
+            HistoryErrorText.Text = $"Lineage export failed: {exception.Message}";
+            HistoryErrorText.Visibility = Visibility.Visible;
+        }
+    }
+
     private void Viewport_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_closed || _failed || Viewport.ActualWidth <= 0 || Viewport.ActualHeight <= 0) return;
@@ -179,6 +197,7 @@ public partial class MainWindow : Window
         var statistics = ActiveSimulation.GetStatistics();
         TickText.Text = $"Tick: {statistics.TickCount} | Organisms: {statistics.OrganismCount} | Food: {statistics.FoodCount}"
             + $" | Herbivores: {statistics.HerbivoreCount} | Predators: {statistics.PredatorCount} | Predation: {statistics.TotalPredationEvents}";
+        if (_experiment.Lineage.CapacityTruncated) TickText.Text += $" | Lineage truncated: {_experiment.Lineage.DroppedLineageRecords} dropped";
         var trait = SelectedTrait;
         var moments = trait switch
         {
@@ -192,8 +211,10 @@ public partial class MainWindow : Window
             $"{label}: {moments.Mean:G4} ± {moments.StandardDeviation:G4} | Births: {statistics.TotalBirths} | Deaths: {statistics.TotalDeaths}");
         InspectorPanel.Visibility = _experiment.Inspection.SelectedId is null ? Visibility.Collapsed : Visibility.Visible;
         InspectorText.Text = _experiment.Inspection.Format(ActiveSimulation);
-        HistoryErrorText.Text = _experiment.HistoryObservationError ?? "";
-        HistoryErrorText.Visibility = _experiment.HistoryObservationError is null ? Visibility.Collapsed : Visibility.Visible;
+        if (_experiment.Inspection.SelectedId is int selected)
+            InspectorText.Text += "\n" + _experiment.Lineage.Format(selected) + "\n" + TrajectoryDescriptor.Calculate(_experiment.Inspection).Format();
+        HistoryErrorText.Text = string.Join("\n", new[] { _experiment.HistoryObservationError, _experiment.LineageObservationError }.Where(s => s is not null));
+        HistoryErrorText.Visibility = HistoryErrorText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         try { _historyWindow?.Refresh(); }
         catch (Exception exception) { HistoryErrorText.Text = $"History view failed: {exception.Message}"; HistoryErrorText.Visibility = Visibility.Visible; }
     }

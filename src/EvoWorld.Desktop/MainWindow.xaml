@@ -35,6 +35,8 @@
             <TextBlock x:Name="StatisticsText" Foreground="#C4CFDC" TextWrapping="Wrap" />
         </StackPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="12,8">
+            <Button DockPanel.Dock="Right" Content="Export lineage CSV..." Click="LineageExport_Click" Padding="10,4" Margin="8,0,0,0"
+                    ToolTip="Export retained scalar parentage records. Reset discards this run's lineage." />
             <Button DockPanel.Dock="Right" Content="Population history..." Click="History_Click" Padding="10,4" Margin="8,0,0,0"
                     ToolTip="Open sampled population curves and Export history CSV. Reset discards this run's history." />
             <TextBlock x:Name="StatusText" Text="Ready" Foreground="#C4CFDC" VerticalAlignment="Center" TextWrapping="Wrap" />

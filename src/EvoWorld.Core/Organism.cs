@@ -15,6 +15,7 @@ public sealed class Organism
     public double SteeringRate { get; }
     public NeuralGenome Brain { get; }
     public Species Species { get; }
+    public int? ParentId { get; }
 
     internal Organism(int id, double x, double y, double headingRadians, double energy)
         : this(id, x, y, headingRadians, energy, 50, 1)
@@ -40,7 +41,15 @@ public sealed class Organism
 
     internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
         double sensingRadius, double steeringRate, NeuralGenome brain, Species species)
+        : this(id, x, y, headingRadians, energy, speed, metabolism, sensingRadius, steeringRate, brain, species, null)
     {
+    }
+
+    internal Organism(int id, double x, double y, double headingRadians, double energy, double speed, double metabolism,
+        double sensingRadius, double steeringRate, NeuralGenome brain, Species species, int? parentId)
+    {
+        if (parentId is < 0 || (parentId.HasValue && parentId.Value == id))
+            throw new ArgumentOutOfRangeException(nameof(parentId));
         if (species is not Species.Herbivore and not Species.Predator)
             throw new ArgumentOutOfRangeException(nameof(species));
         ArgumentNullException.ThrowIfNull(brain);
@@ -59,5 +68,6 @@ public sealed class Organism
         SteeringRate = steeringRate;
         Brain = brain;
         Species = species;
+        ParentId = parentId;
     }
 }

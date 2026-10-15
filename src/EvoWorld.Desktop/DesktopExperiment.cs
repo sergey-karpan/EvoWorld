@@ -6,16 +6,19 @@ namespace EvoWorld.Desktop;
 // stays in MainWindow; selection never advances or changes the active simulation.
 internal sealed class DesktopExperiment
 {
-    private sealed record ActiveRun(Simulation Simulation, ExperimentOptions Options, PopulationHistory History);
+    private sealed record ActiveRun(Simulation Simulation, ExperimentOptions Options, PopulationHistory History, LineageLedger Lineage);
     private readonly Func<SimulationSettings, Simulation> _createSimulation;
     private readonly Func<Simulation, PopulationHistory> _createHistory;
+    private readonly Func<Simulation, LineageLedger> _createLineage;
     private ActiveRun _active;
     internal OrganismInspection Inspection { get; } = new();
 
     internal Simulation Simulation => _active.Simulation;
     internal ExperimentOptions ActiveOptions => _active.Options;
     internal PopulationHistory History => _active.History;
+    internal LineageLedger Lineage => _active.Lineage;
     internal string? HistoryObservationError { get; private set; }
+    internal string? LineageObservationError { get; private set; }
     internal ExperimentOptions PendingOptions { get; private set; } = ExperimentOptions.Initial;
     internal bool HasPendingChanges => PendingOptions.Effective != ActiveOptions;
 
@@ -25,9 +28,14 @@ internal sealed class DesktopExperiment
         : this(createSimulation, static simulation => new PopulationHistory(simulation)) { }
 
     internal DesktopExperiment(Func<SimulationSettings, Simulation>? createSimulation, Func<Simulation, PopulationHistory> createHistory)
+        : this(createSimulation, createHistory, static simulation => new LineageLedger(simulation)) { }
+
+    internal DesktopExperiment(Func<SimulationSettings, Simulation>? createSimulation, Func<Simulation, PopulationHistory> createHistory,
+        Func<Simulation, LineageLedger> createLineage)
     {
         _createSimulation = createSimulation ?? (static settings => new Simulation(settings));
         _createHistory = createHistory;
+        _createLineage = createLineage;
         _active = Construct(PendingOptions);
     }
 
@@ -44,11 +52,20 @@ internal sealed class DesktopExperiment
         Inspection.Clear(_active.Simulation);
         _active = replacement; // Publish only after complete successful construction, even when selections match.
         HistoryObservationError = null;
+        LineageObservationError = null;
     }
 
     internal void AdvanceTick()
     {
         Simulation.AdvanceTick();
+        try
+        {
+            if (Lineage.Observe(Simulation)) LineageObservationError = null;
+        }
+        catch (Exception exception)
+        {
+            LineageObservationError = $"Lineage observation failed at tick {Simulation.TickCount}: {exception.Message}";
+        }
         Inspection.Observe(Simulation); // Only after successful publication; never during paint.
         try
         {
@@ -68,6 +85,7 @@ internal sealed class DesktopExperiment
         var simulation = _createSimulation(settings)
             ?? throw new InvalidOperationException("Simulation construction returned no instance.");
         var history = _createHistory(simulation) ?? throw new InvalidOperationException("History construction returned no instance.");
-        return new ActiveRun(simulation, selected.Effective, history);
+        var lineage = _createLineage(simulation) ?? throw new InvalidOperationException("Lineage construction returned no instance.");
+        return new ActiveRun(simulation, selected.Effective, history, lineage);
     }
 }

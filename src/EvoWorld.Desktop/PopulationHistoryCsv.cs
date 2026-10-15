@@ -73,6 +73,13 @@ internal static class PopulationHistoryCsv
     // Narrow file-operation seams test interrupted serialization and failed atomic replacement.
     internal static void Export(string target, PopulationHistorySnapshot snapshot,
         Action<TextWriter, PopulationHistorySnapshot> write, Action<string, string> replace)
+        => ExportAtomic(target, snapshot, write, replace);
+
+    internal static void ExportAtomic<T>(string target, T snapshot, Action<TextWriter, T> write) => ExportAtomic(target, snapshot, write,
+        static (temporary, destination) => File.Replace(temporary, destination, null));
+
+    internal static void ExportAtomic<T>(string target, T snapshot,
+        Action<TextWriter, T> write, Action<string, string> replace)
     {
         var destination = Path.GetFullPath(target);
         var replaceExisting = File.Exists(destination);

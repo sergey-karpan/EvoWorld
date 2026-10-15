@@ -321,8 +321,9 @@ world. The compact summary shows the selected genetic trait's mean and deviation
 (Speed for None/Energy), births and deaths, including after paused Reset.
 These controls only observe the simulation.
 
-There is no learning, fitness tracking or per-lineage measurement. Histograms,
-correlations, lineage and generational statistics, detailed per-parameter neural weight statistics, detailed predation statistics and
+There is no learning or fitness tracking. Task 12c-mini records parentage and
+observed direct-child counts. Histograms, correlations, lineage trees and
+generational statistics, detailed per-parameter neural weight statistics, detailed predation statistics and
 advanced visualization remain deferred. Measurement does not itself
 cause evolution or guarantee an adaptive result.
 
@@ -868,6 +869,70 @@ during its creation tick. World, RNG, and both allocation counters commit throug
 the same single immutable advancement-record replacement. Failure after any
 tentative births or draws preserves every previous committed component.
 
+## Lineage and observed sampled-path turning
+
+Task 12c-mini adds immutable Core `Organism.ParentId`. Null identifies a founder
+(including an explicit test-world original with unspecified parentage); a birth
+records its exact parent's ID. Adult replacements preserve it even after the
+parent dies. Provenance is never inferred from positions, ID adjacency or genomes.
+
+Desktop observes each committed tick in a separate run-scoped scalar lineage
+ledger. Founders observed at initialization have birth tick zero; adjacent
+observations give exact birth and first-absent death ticks. Repeated ticks are
+no-ops. A gap never creates interpolated events: new birth times and disappeared
+organisms' death times are unknown. Alive-at-last-observation is explicit.
+`DirectChildCount = 0` is an exact zero; null means unavailable or incomplete.
+A gap conservatively invalidates every previously retained count and the counts
+of newly seen organisms that could have reproduced during the gap. Later births
+do not restore an unknown lifetime count. The inspector reports the ledger's
+observation tick, so an observer failure cannot present stale data as current.
+
+At **100,000 records**, only the oldest deceased records are evicted, in first
+observation order. Living records are never evicted. Parent references and known
+counts survive eviction of related records. `DroppedLineageRecords` and
+`CapacityTruncated` report run-level loss; unrelated retained rows are not marked
+incomplete solely because another row was evicted. If no safe eviction exists,
+the named capacity error preserves the prior ledger; Core keeps advancing and
+the existing observation-error area reports it. Recovery follows gap rules.
+Reset constructs the replacement run and ledger before publishing either; failed
+Reset retains the old run. Export before Reset to retain previous observations.
+
+The selected-organism inspector also reports **Observed sampled-path turning
+(retained selection trail; max 500 positions)**. Adjacent nonzero displacement
+vectors give signed vertex angles using scaled unit vectors and `atan2(cross,
+dot)`. X increases right and Y down: positive means clockwise on screen. Signed
+mean and mean absolute turn use the same valid-turn denominator. Direction
+consistency is `max(positive, negative)/(positive+negative)`, excluding exact zero
+turns; it is unavailable when no nonzero turn exists. Insufficient data are N/A.
+Stationary segments invalidate adjacent turns without bridging. Selection resets
+and death-frozen trails retain their existing storage and drawing semantics.
+
+This measures the retained selection window, not lifetime or population behavior.
+The descriptor does not use per-point tick IDs to detect missed observations;
+neighboring retained positions are treated as neighboring observations. Boundary
+reflections are included, sparse sampling can alias loops, and reflection filtering,
+curvature and radius estimates are deferred. A shared trajectory appearance cannot
+establish ancestry or adaptation. Lineage confirms parentage, but correlations,
+causation and selection still require comparative multi-seed experiments.
+
+**Export lineage CSV...** explicitly freezes the scalar ledger and active metadata
+into a separate file. Cancellation is a no-op. It uses UTF-8 BOM `EF BB BF`, CRLF,
+invariant round-trip numbers, exact unsigned UInt64 seed, and the same temporary
+sibling/atomic-replacement writer as population history. Nulls are blank. Flags
+are `Complete`, or issues joined in this order: `MissingBirthTick`,
+`MissingDeathTick`, `CapacityTruncated`, `ObservationGap`. Complete means complete
+through the last observation, not necessarily deceased. The fixed 15 columns are:
+
+```text
+Seed,EffectiveMode,EffectiveNeuralMutationAmplitude,InitialPredatorCount,TimestepSeconds,DroppedLineageRecords,CapacityTruncated,OrganismId,Species,ParentId,BirthTick,DeathTick,IsAliveAtLastObservation,DirectChildCount,CompletenessFlag
+```
+
+`EffectiveMode` is `Rule-based` or `Neural`. `RuntimeVersion` is intentionally
+omitted from lineage CSV; population-history CSV retains it and its unchanged
+66-column contract and chart. Lineage CSV includes neither trajectories nor
+lifetime turning metrics, phenotype–fitness correlations or per-individual feeding
+success. Per-organism food-pickup counters and full Task 12c remain deferred.
+
 ## Individual Traits and Mutation
 
 Each immutable organism has finite, nonnegative Speed and Metabolism. Movement
@@ -1018,6 +1083,9 @@ Task 12b3 adds Desktop predator choices with pending Reset semantics, purple
 predator outlines, a legend, and live species and cumulative predation counts.
 Task 12b4 adds bounded sampled population history, species trait and descriptive
 genome dispersion summaries, population curves and explicit atomic CSV export.
+Task 12c-mini adds authoritative parentage, bounded per-tick lineage observations,
+selected-trail turning descriptors and a separate explicit lineage CSV export.
+Full Task 12c ecosystem evolution remains deferred.
 
 Additional traits, persistence, and a full configuration editor remain deferred.
 
